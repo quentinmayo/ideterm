@@ -5,43 +5,11 @@ import { basename } from 'node:path'
 import type { LaunchResult, Tool } from '@shared/types'
 import { defaultShell, listTools } from './tools'
 import { ptyManager } from './pty'
-
-/** Quote an argument for a shell command line if it contains spaces or quotes. */
-function quote(arg: string): string {
-  if (arg === '') return '""'
-  return /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg
-}
-
-/** Place the folder path relative to the tool's default args. */
-function placeFolder(tool: Tool, folderPath: string | undefined): string[] {
-  const folder = folderPath ? [folderPath] : []
-  switch (tool.folderArgPosition ?? 'append') {
-    case 'prepend':
-      return [...folder, ...tool.args]
-    case 'none':
-      return [...tool.args]
-    case 'append':
-    default:
-      return [...tool.args, ...folder]
-  }
-}
-
-function resolveLaunchMode(tool: Tool): 'external' | 'shell' | 'command' {
-  if (tool.launchMode) return tool.launchMode
-  switch (tool.type) {
-    case 'ide':
-      return 'external'
-    case 'terminal':
-      return 'shell'
-    default:
-      return 'command'
-  }
-}
+import { buildCommandLine, resolveLaunchMode } from './launchCommand'
 
 /** Launch a detached external process (its own window) — IDEs, GUI terminals. */
 function launchExternal(tool: Tool, folderPath?: string): LaunchResult {
-  const args = placeFolder(tool, folderPath)
-  const commandLine = [tool.path, ...args].map(quote).join(' ')
+  const commandLine = buildCommandLine(tool, folderPath)
   try {
     // shell:true so Windows .cmd/.bat shims (e.g. code.cmd) launch correctly.
     const child = spawn(commandLine, {
@@ -84,7 +52,7 @@ export async function launchTool(toolId: string, folderPath?: string): Promise<L
       return { kind: 'terminal', ok: true, message: `Opened ${tool.name}`, session }
     }
     // mode === 'command': run the default shell, then type the tool's command.
-    const initialCommand = [tool.path, ...placeFolder(tool, folderPath)].map(quote).join(' ')
+    const initialCommand = buildCommandLine(tool, folderPath)
     const session = ptyManager.create({
       cwd,
       shell: defaultShell(),

@@ -1,34 +1,20 @@
 import { promises as fs } from 'node:fs'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { FileEntry } from '@shared/types'
 import { store } from '../store'
+import { isPathInsideRoots } from './pathSafety'
 
-const isWin = process.platform === 'win32'
 const MAX_READ_BYTES = 5 * 1024 * 1024 // 5 MB editor guard
-
-/** Normalize for comparison (case-insensitive on Windows). */
-function norm(p: string): string {
-  const r = resolve(p)
-  return isWin ? r.toLowerCase() : r
-}
 
 /** Every project folder path is an allowed root for file operations. */
 function roots(): string[] {
-  return store
-    .getState()
-    .projects.flatMap((p) => p.folders.map((f) => norm(f.path)))
-}
-
-function isInside(child: string, parent: string): boolean {
-  const rel = relative(parent, child)
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+  return store.getState().projects.flatMap((p) => p.folders.map((f) => f.path))
 }
 
 /** Reject any path outside the user's configured project folders. */
 function assertAllowed(target: string): string {
   const resolved = resolve(target)
-  const n = norm(resolved)
-  if (!roots().some((r) => isInside(n, r))) {
+  if (!isPathInsideRoots(resolved, roots())) {
     throw new Error('Path is outside any project folder')
   }
   return resolved

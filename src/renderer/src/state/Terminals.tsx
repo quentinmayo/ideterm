@@ -10,11 +10,16 @@ import {
 import type { CreateTerminalOptions, TerminalSession } from '@shared/types'
 import { useToast } from '../components/Toast'
 import { disposeTerminal } from '../terminal/termCache'
+import {
+  firstSession,
+  hasSession,
+  newLeaf,
+  removeLeaf,
+  splitLeaf,
+  type TileNode
+} from '../terminal/tileTree'
 
-/** Recursive tiling tree: a leaf hosts one session; a split arranges children. */
-export type TileNode =
-  | { kind: 'leaf'; id: string; sessionId: string }
-  | { kind: 'split'; id: string; dir: 'row' | 'col'; children: TileNode[] }
+export type { TileNode }
 
 export interface TerminalGroup {
   id: string
@@ -29,40 +34,6 @@ export interface FloatingTerm {
   y: number
   w: number
   h: number
-}
-
-function newLeaf(sessionId: string): TileNode {
-  return { kind: 'leaf', id: crypto.randomUUID(), sessionId }
-}
-
-function splitLeaf(node: TileNode, target: string, newSession: string, dir: 'row' | 'col'): TileNode {
-  if (node.kind === 'leaf') {
-    if (node.sessionId !== target) return node
-    return { kind: 'split', id: crypto.randomUUID(), dir, children: [node, newLeaf(newSession)] }
-  }
-  return { ...node, children: node.children.map((c) => splitLeaf(c, target, newSession, dir)) }
-}
-
-function removeLeaf(node: TileNode, sessionId: string): TileNode | null {
-  if (node.kind === 'leaf') return node.sessionId === sessionId ? null : node
-  const kids = node.children.map((c) => removeLeaf(c, sessionId)).filter((c): c is TileNode => c !== null)
-  if (kids.length === 0) return null
-  if (kids.length === 1) return kids[0]
-  return { ...node, children: kids }
-}
-
-function firstSession(node: TileNode): string | null {
-  if (node.kind === 'leaf') return node.sessionId
-  for (const c of node.children) {
-    const s = firstSession(c)
-    if (s) return s
-  }
-  return null
-}
-
-function hasSession(node: TileNode, sessionId: string): boolean {
-  if (node.kind === 'leaf') return node.sessionId === sessionId
-  return node.children.some((c) => hasSession(c, sessionId))
 }
 
 interface TerminalsValue {
