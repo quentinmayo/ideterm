@@ -34,8 +34,8 @@ export function FolderCard({
     void refresh()
   }, [refresh])
 
-  const launch = async (toolId: string): Promise<void> => {
-    const res = await window.api.launch.tool(toolId, folder.path)
+  const launch = async (toolId: string, modeId?: string): Promise<void> => {
+    const res = await window.api.launch.tool(toolId, folder.path, modeId)
     if (!res.ok) toast(res.message, 'error')
     else if (res.kind === 'terminal' && res.session) terminals.adoptSession(res.session)
   }
@@ -54,15 +54,23 @@ export function FolderCard({
   const items = (): MenuItem[] => {
     const ides = tools.filter((t) => t.type === 'ide')
     const runnable = tools.filter((t) => t.type === 'terminal' || t.type === 'ai-agent' || t.type === 'custom')
+    // One entry per tool, or one per mode when the tool defines configuration modes.
+    const entries = (verb: string, t: (typeof tools)[number]): MenuItem[] =>
+      t.modes?.length
+        ? t.modes.map((m) => ({
+            icon: t.icon,
+            label: `${verb} ${t.name} · ${m.label}`,
+            onClick: () => void launch(t.id, m.id)
+          }))
+        : [{ icon: t.icon, label: `${verb} ${t.name}`, onClick: () => void launch(t.id) }]
     const list: MenuItem[] = [{ header: 'Open' }]
-    for (const t of ides) list.push({ icon: t.icon, label: `Open in ${t.name}`, onClick: () => void launch(t.id) })
+    for (const t of ides) list.push(...entries('Open in', t))
     list.push({
       icon: '🖥',
       label: 'Open terminal here',
       onClick: () => void terminals.newTerminal({ cwd: folder.path, title: folder.name })
     })
-    for (const t of runnable)
-      list.push({ icon: t.icon, label: `Run ${t.name}`, onClick: () => void launch(t.id) })
+    for (const t of runnable) list.push(...entries('Run', t))
     if (savedCommands.length) {
       list.push({ separator: true }, { header: 'Saved commands' })
       for (const c of savedCommands)
@@ -113,6 +121,9 @@ export function FolderCard({
   return (
     <div
       className="folder-card"
+      style={{ cursor: 'pointer' }}
+      title="Open in file tree · right-click for actions"
+      onClick={onOpenFiles}
       onContextMenu={(e) => {
         e.preventDefault()
         setMenu({ x: e.clientX, y: e.clientY })
@@ -120,13 +131,26 @@ export function FolderCard({
     >
       <div className="row">
         <strong style={{ flex: 1 }}>{folder.name}</strong>
-        <button className="icon-btn" title="Refresh git" onClick={() => void refresh()}>
+        <button
+          className="icon-btn"
+          title="Refresh git"
+          onClick={(e) => {
+            e.stopPropagation()
+            void refresh()
+          }}
+        >
           ↻
         </button>
         <button
           className="icon-btn"
           title="Actions"
-          onClick={(e) => setMenu({ x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().bottom })}
+          onClick={(e) => {
+            e.stopPropagation()
+            setMenu({
+              x: e.currentTarget.getBoundingClientRect().left,
+              y: e.currentTarget.getBoundingClientRect().bottom
+            })
+          }}
         >
           ⋯
         </button>

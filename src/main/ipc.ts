@@ -4,6 +4,7 @@ import type {
   CreateTerminalOptions,
   Project,
   SavedCommand,
+  SearchOptions,
   SessionSnapshot,
   SshConfig,
   Tool
@@ -12,6 +13,7 @@ import { store } from './store'
 import { detectTools, listTools } from './services/tools'
 import * as gitSvc from './services/git'
 import * as fsSvc from './services/fs'
+import * as searchSvc from './services/search'
 import * as sessionSvc from './services/session'
 import { buildSshCommand } from './services/ssh'
 import { launchCommand, launchTool } from './services/launcher'
@@ -118,6 +120,12 @@ export function registerIpc(win: BrowserWindow): void {
     shell.showItemInFolder(target)
   })
   ipcMain.handle('fs:openExternal', (_e, target: string) => shell.openPath(target))
+  ipcMain.handle('fs:search', (_e, dir: string, query: string, opts: SearchOptions) =>
+    searchSvc.searchDir(dir, query, opts)
+  )
+  ipcMain.handle('fs:replace', (_e, dir: string, query: string, replacement: string, opts: SearchOptions) =>
+    searchSvc.replaceInDir(dir, query, replacement, opts)
+  )
 
   // --- ssh ---
   ipcMain.handle('ssh:build', (_e, config: SshConfig) => buildSshCommand(config))

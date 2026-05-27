@@ -8,7 +8,10 @@ import type {
   LaunchResult,
   PersistedState,
   Project,
+  ReplaceResult,
   SavedCommand,
+  SearchFileResult,
+  SearchOptions,
   SessionSnapshot,
   SessionState,
   SnapshotMeta,
@@ -67,7 +70,7 @@ export interface IdeTermApi {
     branches(path: string): Promise<string[]>
   }
   launch: {
-    tool(toolId: string, folderPath?: string): Promise<LaunchResult>
+    tool(toolId: string, folderPath?: string, modeId?: string): Promise<LaunchResult>
     command(command: string, cwd?: string, title?: string): Promise<LaunchResult>
   }
   pty: {
@@ -96,6 +99,8 @@ export interface IdeTermApi {
     move(src: string, destDir: string): Promise<string>
     reveal(target: string): Promise<void>
     openExternal(target: string): Promise<string>
+    search(dir: string, query: string, opts: SearchOptions): Promise<SearchFileResult[]>
+    replace(dir: string, query: string, replacement: string, opts: SearchOptions): Promise<ReplaceResult>
   }
   ssh: {
     build(config: SshConfig): Promise<SshBuildResult>

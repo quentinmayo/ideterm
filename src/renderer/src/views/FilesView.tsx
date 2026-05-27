@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSession } from '../state/Session'
+import { useAppState } from '../state/AppState'
+import { useTerminals } from '../state/Terminals'
 import { useToast } from '../components/Toast'
+import { CommandPalette, type PaletteItem } from '../components/CommandPalette'
+import { FindReplacePanel } from '../components/FindReplacePanel'
 import { FileTree } from '../files/FileTree'
 import { FileEditor } from '../files/FileEditor'
 
@@ -11,9 +15,13 @@ interface OpenDoc {
 
 export function FilesView(): JSX.Element {
   const { projects, filesTarget: target, openFiles, setFilesTarget, addOpenFile, removeOpenFile } = useSession()
+  const { tools } = useAppState()
+  const terminals = useTerminals()
   const toast = useToast()
   const [docs, setDocs] = useState<Record<string, OpenDoc>>({})
   const [active, setActive] = useState<string | null>(null)
+  const [palette, setPalette] = useState<'tool' | 'folder' | null>(null)
+  const [findOpen, setFindOpen] = useState(false)
 
   const loadDoc = useCallback(
     async (path: string) => {
@@ -68,6 +76,28 @@ export function FilesView(): JSX.Element {
     })
   }
 
+  // Quick-action palettes: launch a tool here, or jump to another folder.
+  const toolItems: PaletteItem[] = tools.flatMap((t) =>
+    t.modes?.length
+      ? t.modes.map((m) => ({ id: `${t.id}@@${m.id}`, label: `${t.name} · ${m.label}`, hint: t.path, icon: t.icon }))
+      : [{ id: t.id, label: t.name, hint: `${t.type} · ${t.path}`, icon: t.icon }]
+  )
+  const folderItems: PaletteItem[] = projects.flatMap((p) =>
+    p.folders.map((f) => ({ id: f.path, label: f.name, hint: `${p.name} · ${f.path}`, icon: p.icon ?? '📁' }))
+  )
+
+  const launchTool = async (encodedId: string): Promise<void> => {
+    if (!target) return
+    const [toolId, modeId] = encodedId.split('@@')
+    const res = await window.api.launch.tool(toolId, target.path, modeId)
+    if (!res.ok) toast(res.message, 'error')
+    else if (res.kind === 'terminal' && res.session) terminals.adoptSession(res.session)
+  }
+  const switchFolder = (path: string): void => {
+    const found = projects.flatMap((p) => p.folders).find((f) => f.path === path)
+    if (found) setFilesTarget({ path: found.path, name: found.name })
+  }
+
   if (!target) {
     const folders = projects.flatMap((p) => p.folders.map((f) => ({ ...f, project: p.name })))
     return (
@@ -111,6 +141,21 @@ export function FilesView(): JSX.Element {
     <div className="files-layout">
       <FileTree root={target.path} rootName={target.name} selectedPath={active} onOpenFile={openFile} />
       <div className="editor-area">
+        <div className="quick-actions">
+          <button className="btn sm" title="Launch a tool in this folder" onClick={() => setPalette('tool')}>
+            ⚡ Run tool…
+          </button>
+          <button className="btn sm" title="Switch to another folder" onClick={() => setPalette('folder')}>
+            📁 {target.name} ▾
+          </button>
+          <button className="btn sm" title="Find & replace in this folder" onClick={() => setFindOpen(true)}>
+            🔎 Find / replace…
+          </button>
+          <div className="spacer" />
+          <button className="icon-btn" title="Reveal folder in OS explorer" onClick={() => void window.api.fs.reveal(target.path)}>
+            📂
+          </button>
+        </div>
         <div className="editor-tabs">
           <div className="editor-tab" onClick={() => setFilesTarget(null)} title="Back to folder list">
             ‹ Folders
@@ -151,6 +196,33 @@ export function FilesView(): JSX.Element {
           </div>
         )}
       </div>
+
+      {palette === 'tool' && (
+        <CommandPalette
+          title="Run a tool in this folder"
+          placeholder="Search tools…"
+          items={toolItems}
+          onPick={(id) => void launchTool(id)}
+          onClose={() => setPalette(null)}
+        />
+      )}
+      {palette === 'folder' && (
+        <CommandPalette
+          title="Switch folder"
+          placeholder="Search folders…"
+          items={folderItems}
+          onPick={switchFolder}
+          onClose={() => setPalette(null)}
+        />
+      )}
+      {findOpen && (
+        <FindReplacePanel
+          dir={target.path}
+          dirName={target.name}
+          onOpenFile={openFile}
+          onClose={() => setFindOpen(false)}
+        />
+      )}
     </div>
   )
 }

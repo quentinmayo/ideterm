@@ -5,7 +5,7 @@ import { basename } from 'node:path'
 import type { LaunchResult, Tool } from '@shared/types'
 import { defaultShell, listTools } from './tools'
 import { ptyManager } from './pty'
-import { buildCommandLine, resolveLaunchMode } from './launchCommand'
+import { buildCommandLine, effectiveTool, resolveLaunchMode } from './launchCommand'
 
 /** Launch a detached external process (its own window) — IDEs, GUI terminals. */
 function launchExternal(tool: Tool, folderPath?: string): LaunchResult {
@@ -26,14 +26,20 @@ function launchExternal(tool: Tool, folderPath?: string): LaunchResult {
   }
 }
 
-export async function launchTool(toolId: string, folderPath?: string): Promise<LaunchResult> {
+export async function launchTool(
+  toolId: string,
+  folderPath?: string,
+  modeId?: string
+): Promise<LaunchResult> {
   const tools = await listTools()
-  const tool = tools.find((t) => t.id === toolId)
-  if (!tool) return { kind: 'external', ok: false, message: `Tool not found: ${toolId}` }
+  const base = tools.find((t) => t.id === toolId)
+  if (!base) return { kind: 'external', ok: false, message: `Tool not found: ${toolId}` }
   if (folderPath && !existsSync(folderPath)) {
     return { kind: 'external', ok: false, message: `Folder not found: ${folderPath}` }
   }
 
+  // Apply the selected mode (args + optional type/launch overrides) for this launch.
+  const tool = effectiveTool(base, modeId)
   const mode = resolveLaunchMode(tool)
   const cwd = folderPath && existsSync(folderPath) ? folderPath : homedir()
   const label = folderPath ? `${tool.name} · ${basename(folderPath)}` : tool.name

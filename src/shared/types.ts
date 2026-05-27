@@ -32,6 +32,26 @@ export interface Tool {
    * Defaults are inferred from `type` when omitted.
    */
   launchMode?: 'external' | 'shell' | 'command'
+  /**
+   * Optional named launch presets. When present, the UI lets you pick a mode;
+   * each mode's args replace the tool's default `args` for that launch.
+   */
+  modes?: ToolMode[]
+}
+
+/**
+ * A named launch configuration for a tool. Lets one tool be multi-purpose:
+ * each mode can override the type and launch config, not just the args.
+ * e.g. "Open (IDE)" vs "Diff (run `code --diff` in a terminal)".
+ */
+export interface ToolMode {
+  id: string
+  label: string
+  args: string[]
+  /** Override the tool's type for this mode (a tool can be multi-type). */
+  type?: ToolType
+  launchMode?: 'external' | 'shell' | 'command'
+  folderArgPosition?: 'append' | 'prepend' | 'none'
 }
 
 export interface ProjectFolder {
@@ -46,6 +66,8 @@ export interface Project {
   id: string
   name: string
   color?: string
+  /** Emoji shown next to the project name. */
+  icon?: string
   folders: ProjectFolder[]
   createdAt: number
 }
@@ -79,6 +101,28 @@ export interface FileEntry {
   path: string
   kind: 'file' | 'directory'
   size: number
+}
+
+export interface SearchOptions {
+  regex?: boolean
+  caseSensitive?: boolean
+}
+
+export interface SearchMatch {
+  line: number
+  text: string
+}
+
+export interface SearchFileResult {
+  path: string
+  /** Path relative to the searched directory. */
+  relative: string
+  matches: SearchMatch[]
+}
+
+export interface ReplaceResult {
+  filesChanged: number
+  replacements: number
 }
 
 /** One changed path in a working tree, as shown in the inline Git panel. */

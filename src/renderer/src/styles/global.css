@@ -666,6 +666,14 @@ textarea {
   flex-direction: column;
   min-width: 0;
 }
+.quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+}
 .editor-tabs {
   display: flex;
   background: var(--bg-1);

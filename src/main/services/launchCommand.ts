@@ -42,3 +42,20 @@ export function resolveLaunchMode(tool: Tool): 'external' | 'shell' | 'command' 
 export function buildCommandLine(tool: Tool, folderPath?: string): string {
   return [tool.path, ...placeFolder(tool, folderPath)].map(quoteArg).join(' ')
 }
+
+/**
+ * The effective tool for a launch: a selected mode overrides args and, when set,
+ * the type / launch mode / folder-arg position. Lets one tool be multi-type.
+ */
+export function effectiveTool(tool: Tool, modeId?: string): Tool {
+  if (!modeId || !tool.modes) return tool
+  const mode = tool.modes.find((m) => m.id === modeId)
+  if (!mode) return tool
+  return {
+    ...tool,
+    args: mode.args ?? tool.args,
+    type: mode.type ?? tool.type,
+    launchMode: mode.launchMode ?? tool.launchMode,
+    folderArgPosition: mode.folderArgPosition ?? tool.folderArgPosition
+  }
+}

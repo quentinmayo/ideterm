@@ -4,6 +4,7 @@ import { useAppState } from '../state/AppState'
 import { useSession } from '../state/Session'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
+import { ContextMenu, type MenuItem } from '../components/ContextMenu'
 import { FolderCard } from '../components/FolderCard'
 import { GitPanel } from '../components/GitPanel'
 import { SubfolderPicker } from '../components/SubfolderPicker'
@@ -22,6 +23,28 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
   const [editing, setEditing] = useState<Project | null>(null)
   const [gitFolder, setGitFolder] = useState<{ path: string; name: string } | null>(null)
   const [subfolderTarget, setSubfolderTarget] = useState<ProjectFolder | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; project: Project } | null>(null)
+
+  const blankProject = (): Project => ({
+    id: crypto.randomUUID(),
+    name: '',
+    color: COLORS[0],
+    icon: '📁',
+    folders: [],
+    createdAt: Date.now()
+  })
+
+  const projectMenu = (p: Project): MenuItem[] => [
+    { icon: '✏️', label: 'Edit project…', onClick: () => setEditing(p) },
+    { icon: '➕', label: 'New project', onClick: () => setEditing(blankProject()) },
+    { separator: true },
+    {
+      icon: '🗑',
+      label: 'Delete project',
+      danger: true,
+      onClick: () => void removeProject(p.id)
+    }
+  ]
 
   const selectedId = selectedProjectId
   const setSelectedId = setSelectedProjectId
@@ -82,13 +105,7 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
       >
         <div className="row" style={{ marginBottom: 10 }}>
           <strong style={{ flex: 1 }}>Projects</strong>
-          <button
-            className="icon-btn"
-            title="New project"
-            onClick={() =>
-              setEditing({ id: crypto.randomUUID(), name: '', color: COLORS[0], folders: [], createdAt: Date.now() })
-            }
-          >
+          <button className="icon-btn" title="New project" onClick={() => setEditing(blankProject())}>
             ＋
           </button>
         </div>
@@ -97,8 +114,17 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
             key={p.id}
             className={`project-list-item ${p.id === selectedId ? 'active' : ''}`}
             onClick={() => setSelectedId(p.id)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setMenu({ x: e.clientX, y: e.clientY, project: p })
+            }}
+            title="Right-click for project actions"
           >
-            <span className="dot" style={{ background: p.color ?? COLORS[0] }} />
+            {p.icon ? (
+              <span style={{ fontSize: 14, width: 16, textAlign: 'center' }}>{p.icon}</span>
+            ) : (
+              <span className="dot" style={{ background: p.color ?? COLORS[0] }} />
+            )}
             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {p.name || 'Untitled'}
             </span>
@@ -115,12 +141,7 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
           <div className="empty">
             <div className="big">📁</div>
             <div>Create a project, then add the folders you work across.</div>
-            <button
-              className="btn primary"
-              onClick={() =>
-                setEditing({ id: crypto.randomUUID(), name: '', color: COLORS[0], folders: [], createdAt: Date.now() })
-              }
-            >
+            <button className="btn primary" onClick={() => setEditing(blankProject())}>
               ＋ New project
             </button>
           </div>
@@ -128,7 +149,11 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
           <div className="view-inner">
             <div className="page-head">
               <div className="row">
-                <span className="dot" style={{ background: selected.color ?? COLORS[0], width: 12, height: 12 }} />
+                {selected.icon ? (
+                  <span style={{ fontSize: 20 }}>{selected.icon}</span>
+                ) : (
+                  <span className="dot" style={{ background: selected.color ?? COLORS[0], width: 12, height: 12 }} />
+                )}
                 <h1 style={{ margin: 0 }}>{selected.name || 'Untitled'}</h1>
                 <span className="muted">· {selected.folders.length} folders</span>
               </div>
@@ -200,6 +225,7 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
           onConfirm={(paths, removeParent) => void addSubfolders(paths, removeParent)}
         />
       )}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={projectMenu(menu.project)} onClose={() => setMenu(null)} />}
     </div>
   )
 }
@@ -217,6 +243,7 @@ function ProjectEditor({
 }): JSX.Element {
   const [name, setName] = useState(project.name)
   const [color, setColor] = useState(project.color ?? COLORS[0])
+  const [icon, setIcon] = useState(project.icon ?? '📁')
 
   return (
     <Modal
@@ -233,15 +260,24 @@ function ProjectEditor({
           <button className="btn" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn primary" onClick={() => void onSave({ ...project, name: name.trim() || 'Untitled', color })}>
+          <button
+            className="btn primary"
+            onClick={() => void onSave({ ...project, name: name.trim() || 'Untitled', color, icon })}
+          >
             Save
           </button>
         </>
       }
     >
-      <div className="field">
-        <label>Project name</label>
-        <input type="text" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Mayo ASPM" />
+      <div className="row" style={{ gap: 12, alignItems: 'flex-end' }}>
+        <div className="field" style={{ flex: 1 }}>
+          <label>Project name</label>
+          <input type="text" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Mayo ASPM" />
+        </div>
+        <div className="field" style={{ width: 80 }}>
+          <label>Icon</label>
+          <input type="text" value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={3} />
+        </div>
       </div>
       <div className="field">
         <label>Color</label>

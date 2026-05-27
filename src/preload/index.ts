@@ -70,7 +70,7 @@ const api: IdeTermApi = {
     branches: (path) => ipcRenderer.invoke('git:branches', path)
   },
   launch: {
-    tool: (toolId, folderPath) => ipcRenderer.invoke('launch:tool', toolId, folderPath),
+    tool: (toolId, folderPath, modeId) => ipcRenderer.invoke('launch:tool', toolId, folderPath, modeId),
     command: (command, cwd, title) => ipcRenderer.invoke('launch:command', command, cwd, title)
   },
   pty: {
@@ -98,7 +98,9 @@ const api: IdeTermApi = {
     rename: (target, newName) => ipcRenderer.invoke('fs:rename', target, newName),
     move: (src, destDir) => ipcRenderer.invoke('fs:move', src, destDir),
     reveal: (target) => ipcRenderer.invoke('fs:reveal', target),
-    openExternal: (target) => ipcRenderer.invoke('fs:openExternal', target)
+    openExternal: (target) => ipcRenderer.invoke('fs:openExternal', target),
+    search: (dir, query, opts) => ipcRenderer.invoke('fs:search', dir, query, opts),
+    replace: (dir, query, replacement, opts) => ipcRenderer.invoke('fs:replace', dir, query, replacement, opts)
   },
   ssh: {
     build: (config) => ipcRenderer.invoke('ssh:build', config)
