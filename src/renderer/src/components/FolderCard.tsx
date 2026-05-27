@@ -9,10 +9,17 @@ interface FolderCardProps {
   folder: ProjectFolder
   onOpenGit: () => void
   onOpenFiles: () => void
+  onAddSubfolders: () => void
   onRemove: () => void
 }
 
-export function FolderCard({ folder, onOpenGit, onOpenFiles, onRemove }: FolderCardProps): JSX.Element {
+export function FolderCard({
+  folder,
+  onOpenGit,
+  onOpenFiles,
+  onAddSubfolders,
+  onRemove
+}: FolderCardProps): JSX.Element {
   const { tools, savedCommands } = useAppState()
   const terminals = useTerminals()
   const toast = useToast()
@@ -76,6 +83,7 @@ export function FolderCard({ folder, onOpenGit, onOpenFiles, onRemove }: FolderC
       { icon: '📋', label: 'Copy path', onClick: () => copy(folder.path, 'Path') },
       { icon: '📂', label: 'Reveal in OS explorer', onClick: () => void window.api.fs.reveal(folder.path) },
       { separator: true },
+      { icon: '🧱', label: 'Break into subfolders…', onClick: onAddSubfolders },
       { icon: '🗑', label: 'Remove from project', danger: true, onClick: onRemove }
     )
     return list

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { Project } from '@shared/types'
+import type { Project, ProjectFolder } from '@shared/types'
 import { useAppState } from '../state/AppState'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
 import { FolderCard } from '../components/FolderCard'
 import { GitPanel } from '../components/GitPanel'
+import { SubfolderPicker } from '../components/SubfolderPicker'
 import type { FilesTarget } from '../App'
 
 const COLORS = ['#6ea8fe', '#b58cff', '#4ec9a8', '#e2c08d', '#f06d6d', '#e8a55c']
@@ -19,6 +20,7 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editing, setEditing] = useState<Project | null>(null)
   const [gitFolder, setGitFolder] = useState<{ path: string; name: string } | null>(null)
+  const [subfolderTarget, setSubfolderTarget] = useState<ProjectFolder | null>(null)
 
   useEffect(() => {
     if (!selectedId && projects.length) setSelectedId(projects[0].id)
@@ -47,6 +49,20 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
   const removeFolder = async (folderId: string): Promise<void> => {
     if (!selected) return
     await saveProject({ ...selected, folders: selected.folders.filter((f) => f.id !== folderId) })
+  }
+
+  const addSubfolders = async (paths: string[], removeParent: boolean): Promise<void> => {
+    if (!selected || !subfolderTarget) return
+    const existing = new Set(selected.folders.map((f) => f.path))
+    const additions = paths
+      .filter((p) => !existing.has(p))
+      .map((p) => ({ id: crypto.randomUUID(), path: p, name: baseName(p) }))
+    const base = removeParent
+      ? selected.folders.filter((f) => f.id !== subfolderTarget.id)
+      : selected.folders
+    await saveProject({ ...selected, folders: [...base, ...additions] })
+    toast(`Added ${additions.length} folder${additions.length === 1 ? '' : 's'}`, 'success')
+    setSubfolderTarget(null)
   }
 
   return (
@@ -132,6 +148,7 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
                     folder={f}
                     onOpenGit={() => setGitFolder({ path: f.path, name: f.name })}
                     onOpenFiles={() => onOpenFiles({ path: f.path, name: f.name })}
+                    onAddSubfolders={() => setSubfolderTarget(f)}
                     onRemove={() => void removeFolder(f.id)}
                   />
                 ))}
@@ -167,6 +184,16 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
           folderName={gitFolder.name}
           ideTools={ideTools}
           onClose={() => setGitFolder(null)}
+        />
+      )}
+
+      {subfolderTarget && selected && (
+        <SubfolderPicker
+          parentPath={subfolderTarget.path}
+          parentName={subfolderTarget.name}
+          existingPaths={selected.folders.map((f) => f.path)}
+          onClose={() => setSubfolderTarget(null)}
+          onConfirm={(paths, removeParent) => void addSubfolders(paths, removeParent)}
         />
       )}
     </div>
