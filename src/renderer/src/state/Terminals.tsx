@@ -7,19 +7,35 @@ import {
   useState,
   type ReactNode
 } from 'react'
-import type { CreateTerminalOptions, TerminalSession } from '@shared/types'
+import type {
+  CreateTerminalOptions,
+  SerializedFloating,
+  SerializedGroup,
+  TerminalSession
+} from '@shared/types'
 import { useToast } from '../components/Toast'
 import { disposeTerminal } from '../terminal/termCache'
 import {
+  buildTree,
+  collectLeaves,
   firstSession,
   hasSession,
   newLeaf,
   removeLeaf,
+  serializeTree,
   splitLeaf,
+  type LeafDescriptor,
   type TileNode
 } from '../terminal/tileTree'
 
 export type { TileNode }
+
+export interface SerializedTerminals {
+  groups: SerializedGroup[]
+  floating: SerializedFloating[]
+  dockVisible: boolean
+  dockHeight: number
+}
 
 export interface TerminalGroup {
   id: string
@@ -55,6 +71,9 @@ interface TerminalsValue {
   setActiveGroup: (groupId: string) => void
   setActiveSession: (sessionId: string) => void
   focusSession: (sessionId: string) => void
+  serialize: () => SerializedTerminals
+  restore: (data: SerializedTerminals) => Promise<void>
+  reset: () => void
   setFloatingRect: (id: string, rect: Partial<Pick<FloatingTerm, 'x' | 'y' | 'w' | 'h'>>) => void
   setDockVisible: (v: boolean) => void
   setDockHeight: (h: number) => void
@@ -241,6 +260,74 @@ export function TerminalsProvider({ children }: { children: ReactNode }): JSX.El
     [sessions]
   )
 
+  const serialize = useCallback((): SerializedTerminals => {
+    const resolve = (id: string): LeafDescriptor => {
+      const s = sessions[id]
+      return { cwd: s?.cwd ?? '', shell: s?.shell ?? '', title: s?.title ?? 'terminal', toolId: s?.toolId }
+    }
+    return {
+      groups: groups.map((g) => ({ name: g.name, tree: serializeTree(g.tree, resolve) })),
+      floating: floating.map((f) => ({ ...resolve(f.sessionId), x: f.x, y: f.y, w: f.w, h: f.h })),
+      dockVisible,
+      dockHeight
+    }
+  }, [groups, floating, sessions, dockVisible, dockHeight])
+
+  const reset = useCallback(() => {
+    setSessions((prev) => {
+      for (const id of Object.keys(prev)) {
+        void window.api.pty.kill(id)
+        disposeTerminal(id)
+      }
+      return {}
+    })
+    setGroups([])
+    setFloating([])
+    setActiveGroupId(null)
+    setActiveSessionId(null)
+  }, [])
+
+  const restore = useCallback(
+    async (data: SerializedTerminals) => {
+      const nextSessions: Record<string, TerminalSession> = {}
+      const nextGroups: TerminalGroup[] = []
+      try {
+        for (const g of data.groups) {
+          const descs = collectLeaves(g.tree)
+          const ids: string[] = []
+          for (const d of descs) {
+            const s = await window.api.pty.create({
+              cwd: d.cwd,
+              shell: d.shell,
+              title: d.title,
+              toolId: d.toolId
+            })
+            nextSessions[s.id] = s
+            ids.push(s.id)
+          }
+          let i = 0
+          nextGroups.push({ id: crypto.randomUUID(), name: g.name, tree: buildTree(g.tree, () => ids[i++]) })
+        }
+        const nextFloating: FloatingTerm[] = []
+        for (const f of data.floating) {
+          const s = await window.api.pty.create({ cwd: f.cwd, shell: f.shell, title: f.title })
+          nextSessions[s.id] = s
+          nextFloating.push({ id: crypto.randomUUID(), sessionId: s.id, x: f.x, y: f.y, w: f.w, h: f.h })
+        }
+        setSessions(nextSessions)
+        setGroups(nextGroups)
+        setFloating(nextFloating)
+        setActiveGroupId(nextGroups[0]?.id ?? null)
+        setActiveSessionId(nextGroups[0] ? firstSession(nextGroups[0].tree) : null)
+        setDockVisible(data.dockVisible)
+        setDockHeight(data.dockHeight)
+      } catch (err) {
+        toast(`Couldn't restore terminals: ${err instanceof Error ? err.message : String(err)}`, 'error')
+      }
+    },
+    [toast]
+  )
+
   const focusSession = useCallback(
     (sessionId: string) => {
       const group = groups.find((g) => hasSession(g.tree, sessionId))
@@ -289,6 +376,9 @@ export function TerminalsProvider({ children }: { children: ReactNode }): JSX.El
       setActiveGroup,
       setActiveSession: setActiveSessionId,
       focusSession,
+      serialize,
+      restore,
+      reset,
       setFloatingRect,
       setDockVisible,
       setDockHeight
@@ -311,6 +401,9 @@ export function TerminalsProvider({ children }: { children: ReactNode }): JSX.El
       dockFloating,
       setActiveGroup,
       focusSession,
+      serialize,
+      restore,
+      reset,
       setFloatingRect
     ]
   )

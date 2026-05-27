@@ -4,6 +4,7 @@ import type {
   CreateTerminalOptions,
   Project,
   SavedCommand,
+  SessionSnapshot,
   SshConfig,
   Tool
 } from '@shared/types'
@@ -11,6 +12,7 @@ import { store } from './store'
 import { detectTools, listTools } from './services/tools'
 import * as gitSvc from './services/git'
 import * as fsSvc from './services/fs'
+import * as sessionSvc from './services/session'
 import { buildSshCommand } from './services/ssh'
 import { launchCommand, launchTool } from './services/launcher'
 import { ptyManager } from './services/pty'
@@ -29,9 +31,32 @@ export function registerIpc(win: BrowserWindow): void {
   ipcMain.handle('tools:save', (_e, tool: Tool) => store.saveTool(tool))
   ipcMain.handle('tools:remove', (_e, id: string) => store.removeTool(id))
 
-  // --- projects ---
-  ipcMain.handle('projects:save', (_e, project: Project) => store.saveProject(project))
-  ipcMain.handle('projects:remove', (_e, id: string) => store.removeProject(id))
+  // --- session snapshots ---
+  ipcMain.handle('session:state', () => sessionSvc.getSessionState())
+  ipcMain.handle('session:read', (_e, path: string) => sessionSvc.readSnapshot(path))
+  ipcMain.handle('session:write', (_e, snapshot: SessionSnapshot, path: string) =>
+    sessionSvc.writeSnapshot(path, snapshot)
+  )
+  ipcMain.handle('session:tempPath', () => sessionSvc.tempPath())
+  ipcMain.handle('session:recent', () => sessionSvc.listRecent())
+  ipcMain.handle('session:setRoots', (_e, projects: Project[]) => sessionSvc.setActiveProjects(projects))
+  ipcMain.handle('session:setRestoreMode', (_e, mode: 'ask' | 'last') => store.setRestoreMode(mode))
+  ipcMain.handle('session:setDir', (_e, dir: string) => store.setSnapshotDir(dir))
+  ipcMain.handle('session:saveDialog', async (_e, defaultName: string) => {
+    const r = await dialog.showSaveDialog(win, {
+      defaultPath: `${sessionSvc.snapshotDir()}/${defaultName}`,
+      filters: [{ name: 'IdeTerm session', extensions: ['ideterm-session.json', 'json'] }]
+    })
+    return r.canceled ? null : r.filePath
+  })
+  ipcMain.handle('session:openDialog', async () => {
+    const r = await dialog.showOpenDialog(win, {
+      defaultPath: sessionSvc.snapshotDir(),
+      properties: ['openFile'],
+      filters: [{ name: 'IdeTerm session', extensions: ['ideterm-session.json', 'json'] }]
+    })
+    return r.canceled ? null : r.filePaths[0]
+  })
 
   // --- dialogs ---
   ipcMain.handle('dialog:pickFolder', async () => {

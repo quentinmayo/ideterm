@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react'
 import type { UpdateCheckResult } from '@shared/types'
 import { useAppState } from '../state/AppState'
+import { useSession } from '../state/Session'
 
 export function SettingsView(): JSX.Element {
   const { settings, updateSettings, tools } = useAppState()
+  const session = useSession()
   const shells = tools.filter((t) => t.launchMode === 'shell')
+
+  const changeDir = async (): Promise<void> => {
+    const dir = await window.api.dialog.pickFolder()
+    if (dir) {
+      await window.api.session.setDir(dir)
+      await session.refreshState()
+    }
+  }
   const [version, setVersion] = useState('')
   const [checking, setChecking] = useState(false)
   const [update, setUpdate] = useState<UpdateCheckResult | null>(null)
@@ -29,6 +39,49 @@ export function SettingsView(): JSX.Element {
           <h1>Settings</h1>
           <div className="sub">Preferences are saved to your user profile and persist across restarts.</div>
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="row">
+          <div style={{ flex: 1 }}>
+            <strong>Workspace</strong>
+            <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+              Active: <b>{session.name || 'none'}</b>
+              {session.isTemporary ? ' (temporary)' : ''}
+            </div>
+            {session.path && (
+              <div className="mono faint" style={{ fontSize: 11, wordBreak: 'break-all' }}>
+                {session.path}
+              </div>
+            )}
+          </div>
+          <button className="btn" onClick={() => void session.save()}>
+            Save
+          </button>
+          <button className="btn" onClick={() => void session.saveAs()}>
+            Save As…
+          </button>
+        </div>
+        <div className="field" style={{ marginTop: 12 }}>
+          <label>Snapshot directory</label>
+          <div className="row">
+            <input type="text" readOnly value={session.sessionState?.dir ?? ''} />
+            <button className="btn" onClick={() => void changeDir()}>
+              Change…
+            </button>
+          </div>
+        </div>
+        <label className="row" style={{ gap: 8, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={session.sessionState?.restoreMode === 'last'}
+            onChange={(e) => void session.setRestoreMode(e.target.checked ? 'last' : 'ask')}
+            style={{ width: 'auto' }}
+          />
+          <span className="muted" style={{ fontSize: 12 }}>
+            Always open the most recent session on startup
+          </span>
+        </label>
       </div>
 
       <div className="card" style={{ marginBottom: 14 }}>

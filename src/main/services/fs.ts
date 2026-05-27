@@ -1,14 +1,14 @@
 import { promises as fs } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { FileEntry } from '@shared/types'
-import { store } from '../store'
 import { isPathInsideRoots } from './pathSafety'
+import { getActiveRoots } from './session'
 
 const MAX_READ_BYTES = 5 * 1024 * 1024 // 5 MB editor guard
 
-/** Every project folder path is an allowed root for file operations. */
+/** Folder paths of the active snapshot's projects are the allowed roots. */
 function roots(): string[] {
-  return store.getState().projects.flatMap((p) => p.folders.map((f) => f.path))
+  return getActiveRoots()
 }
 
 /** Reject any path outside the user's configured project folders. */

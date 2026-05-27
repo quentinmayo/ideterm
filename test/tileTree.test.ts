@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { firstSession, hasSession, newLeaf, removeLeaf, splitLeaf, type TileNode } from '../src/renderer/src/terminal/tileTree'
+import {
+  buildTree,
+  collectLeaves,
+  firstSession,
+  hasSession,
+  newLeaf,
+  removeLeaf,
+  serializeTree,
+  splitLeaf,
+  type LeafDescriptor,
+  type TileNode
+} from '../src/renderer/src/terminal/tileTree'
 
 describe('tileTree', () => {
   it('creates a leaf for a session', () => {
@@ -50,5 +61,27 @@ describe('tileTree', () => {
     let tree = splitLeaf(newLeaf('a'), 'a', 'b', 'row')
     tree = splitLeaf(tree, 'b', 'c', 'col')
     expect(firstSession(tree)).toBe('a')
+  })
+
+  it('serializes and rebuilds a tree, preserving structure and leaf descriptors', () => {
+    let tree = splitLeaf(newLeaf('a'), 'a', 'b', 'row')
+    tree = splitLeaf(tree, 'b', 'c', 'col')
+    const descs: Record<string, LeafDescriptor> = {
+      a: { cwd: '/a', shell: 'sh', title: 'A' },
+      b: { cwd: '/b', shell: 'sh', title: 'B', toolId: 't' },
+      c: { cwd: '/c', shell: 'sh', title: 'C' }
+    }
+    const serialized = serializeTree(tree, (id) => descs[id])
+
+    // Descriptors come back in depth-first order.
+    expect(collectLeaves(serialized).map((d) => d.cwd)).toEqual(['/a', '/b', '/c'])
+    expect(collectLeaves(serialized).find((d) => d.title === 'B')?.toolId).toBe('t')
+
+    // Rebuild assigns fresh session ids in the same DFS order.
+    let i = 0
+    const rebuilt = buildTree(serialized, () => `s${i++}`)
+    expect(firstSession(rebuilt)).toBe('s0')
+    expect(hasSession(rebuilt, 's2')).toBe(true)
+    expect(rebuilt.kind).toBe(serialized.kind)
   })
 })

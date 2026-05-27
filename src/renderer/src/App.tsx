@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
-import { NavRail, type ViewKey } from './components/NavRail'
+import { useEffect } from 'react'
+import { NavRail } from './components/NavRail'
+import { SnapshotLauncher } from './components/SnapshotLauncher'
 import { useAppState } from './state/AppState'
+import { useSession } from './state/Session'
 import { useTerminals } from './state/Terminals'
 import { TerminalDock } from './terminal/TerminalDock'
 import { FloatingLayer } from './terminal/FloatingPanel'
@@ -17,9 +19,8 @@ export interface FilesTarget {
 
 export default function App(): JSX.Element {
   const { ready } = useAppState()
+  const session = useSession()
   const terminals = useTerminals()
-  const [view, setView] = useState<ViewKey>('projects')
-  const [filesTarget, setFilesTarget] = useState<FilesTarget | null>(null)
 
   // Ctrl/Cmd+` toggles the terminal dock.
   useEffect(() => {
@@ -33,11 +34,6 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [terminals])
 
-  const openFiles = (target: FilesTarget): void => {
-    setFilesTarget(target)
-    setView('files')
-  }
-
   if (!ready) {
     return (
       <div className="app">
@@ -49,15 +45,23 @@ export default function App(): JSX.Element {
     )
   }
 
+  if (!session.active) return <SnapshotLauncher />
+
+  const view = session.activeView
+  const openFiles = (target: FilesTarget): void => {
+    session.setFilesTarget(target)
+    session.setActiveView('files')
+  }
+
   return (
     <div className="app">
-      <NavRail view={view} setView={setView} />
+      <NavRail view={view} setView={session.setActiveView} />
       <div className="main">
         <div className="view">
           {view === 'projects' && <ProjectsView onOpenFiles={openFiles} />}
           {view === 'tools' && <ToolsView />}
           {view === 'sessions' && <SessionsView />}
-          {view === 'files' && <FilesView target={filesTarget} onPickTarget={setFilesTarget} />}
+          {view === 'files' && <FilesView />}
           {view === 'settings' && <SettingsView />}
         </div>
         <TerminalDock />

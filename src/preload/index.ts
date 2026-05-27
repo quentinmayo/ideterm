@@ -19,9 +19,39 @@ const api: IdeTermApi = {
     save: (tool) => ipcRenderer.invoke('tools:save', tool),
     remove: (id) => ipcRenderer.invoke('tools:remove', id)
   },
-  projects: {
-    save: (project) => ipcRenderer.invoke('projects:save', project),
-    remove: (id) => ipcRenderer.invoke('projects:remove', id)
+  session: {
+    state: () => ipcRenderer.invoke('session:state'),
+    read: (path) => ipcRenderer.invoke('session:read', path),
+    write: (snapshot, path) => ipcRenderer.invoke('session:write', snapshot, path),
+    tempPath: () => ipcRenderer.invoke('session:tempPath'),
+    recent: () => ipcRenderer.invoke('session:recent'),
+    setRoots: (projects) => ipcRenderer.invoke('session:setRoots', projects),
+    setRestoreMode: (mode) => ipcRenderer.invoke('session:setRestoreMode', mode),
+    setDir: (dir) => ipcRenderer.invoke('session:setDir', dir),
+    saveDialog: (defaultName) => ipcRenderer.invoke('session:saveDialog', defaultName),
+    openDialog: () => ipcRenderer.invoke('session:openDialog'),
+    onMenu: (cb) => {
+      const map: Record<string, string> = {
+        'menu:new-temp': 'new-temp',
+        'menu:new-disk': 'new-disk',
+        'menu:open': 'open',
+        'menu:save': 'save',
+        'menu:save-as': 'save-as',
+        'menu:open-path': 'open-path'
+      }
+      const unsubs = Object.entries(map).map(([channel, action]) => {
+        const listener = (_e: unknown, arg?: string): void => cb(action as never, arg)
+        ipcRenderer.on(channel, listener)
+        return () => ipcRenderer.removeListener(channel, listener)
+      })
+      return () => unsubs.forEach((u) => u())
+    },
+    onFlush: (cb) => {
+      const listener = (): void => cb()
+      ipcRenderer.on('session:flush', listener)
+      return () => ipcRenderer.removeListener('session:flush', listener)
+    },
+    flushDone: () => ipcRenderer.send('session:flush-done')
   },
   dialog: {
     pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),

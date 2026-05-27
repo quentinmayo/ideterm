@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Project, ProjectFolder } from '@shared/types'
 import { useAppState } from '../state/AppState'
+import { useSession } from '../state/Session'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
 import { FolderCard } from '../components/FolderCard'
@@ -15,19 +16,22 @@ function baseName(p: string): string {
 }
 
 export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) => void }): JSX.Element {
-  const { projects, tools, saveProject, removeProject } = useAppState()
+  const { tools } = useAppState()
+  const { projects, saveProject, removeProject, selectedProjectId, setSelectedProjectId } = useSession()
   const toast = useToast()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editing, setEditing] = useState<Project | null>(null)
   const [gitFolder, setGitFolder] = useState<{ path: string; name: string } | null>(null)
   const [subfolderTarget, setSubfolderTarget] = useState<ProjectFolder | null>(null)
+
+  const selectedId = selectedProjectId
+  const setSelectedId = setSelectedProjectId
 
   useEffect(() => {
     if (!selectedId && projects.length) setSelectedId(projects[0].id)
     if (selectedId && !projects.some((p) => p.id === selectedId)) {
       setSelectedId(projects[0]?.id ?? null)
     }
-  }, [projects, selectedId])
+  }, [projects, selectedId, setSelectedId])
 
   const selected = projects.find((p) => p.id === selectedId) ?? null
   const ideTools = tools.filter((t) => t.type === 'ide')

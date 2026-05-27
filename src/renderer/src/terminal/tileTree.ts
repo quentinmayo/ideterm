@@ -1,3 +1,5 @@
+import type { SerializedTile } from '@shared/types'
+
 /**
  * Pure operations on the terminal tiling tree. A leaf hosts one session;
  * a split arranges children in a row or column. No React — unit-testable.
@@ -47,4 +49,41 @@ export function firstSession(node: TileNode): string | null {
 export function hasSession(node: TileNode, sessionId: string): boolean {
   if (node.kind === 'leaf') return node.sessionId === sessionId
   return node.children.some((c) => hasSession(c, sessionId))
+}
+
+/** How to re-spawn a terminal leaf when restoring a snapshot. */
+export interface LeafDescriptor {
+  cwd: string
+  shell: string
+  title: string
+  toolId?: string
+}
+
+/** Convert a live tile tree into a serializable one, resolving each leaf's descriptor. */
+export function serializeTree(
+  node: TileNode,
+  resolve: (sessionId: string) => LeafDescriptor
+): SerializedTile {
+  if (node.kind === 'leaf') return { kind: 'leaf', ...resolve(node.sessionId) }
+  return { kind: 'split', dir: node.dir, children: node.children.map((c) => serializeTree(c, resolve)) }
+}
+
+/** Leaf descriptors in depth-first order (matches buildTree's traversal). */
+export function collectLeaves(node: SerializedTile): LeafDescriptor[] {
+  if (node.kind === 'leaf') {
+    const { kind: _k, ...desc } = node
+    return [desc]
+  }
+  return node.children.flatMap(collectLeaves)
+}
+
+/** Rebuild a live tile tree, calling nextSessionId() per leaf in the same DFS order. */
+export function buildTree(node: SerializedTile, nextSessionId: () => string): TileNode {
+  if (node.kind === 'leaf') return { kind: 'leaf', id: crypto.randomUUID(), sessionId: nextSessionId() }
+  return {
+    kind: 'split',
+    id: crypto.randomUUID(),
+    dir: node.dir,
+    children: node.children.map((c) => buildTree(c, nextSessionId))
+  }
 }

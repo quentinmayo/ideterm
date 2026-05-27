@@ -1,43 +1,48 @@
-import { useCallback, useState } from 'react'
-import { useAppState } from '../state/AppState'
+import { useCallback, useEffect, useState } from 'react'
+import { useSession } from '../state/Session'
 import { useToast } from '../components/Toast'
 import { FileTree } from '../files/FileTree'
 import { FileEditor } from '../files/FileEditor'
-import type { FilesTarget } from '../App'
 
 interface OpenDoc {
   text: string
   dirty: boolean
 }
 
-export function FilesView({
-  target,
-  onPickTarget
-}: {
-  target: FilesTarget | null
-  onPickTarget: (t: FilesTarget) => void
-}): JSX.Element {
-  const { projects } = useAppState()
+export function FilesView(): JSX.Element {
+  const { projects, filesTarget: target, openFiles, setFilesTarget, addOpenFile, removeOpenFile } = useSession()
   const toast = useToast()
-  const [tabs, setTabs] = useState<FilesTarget[]>([])
   const [docs, setDocs] = useState<Record<string, OpenDoc>>({})
   const [active, setActive] = useState<string | null>(null)
 
-  const openFile = useCallback(
-    async (path: string, name: string) => {
-      setActive(path)
-      setTabs((t) => (t.some((x) => x.path === path) ? t : [...t, { path, name }]))
-      if (!docs[path]) {
-        try {
-          const text = await window.api.fs.read(path)
-          setDocs((d) => ({ ...d, [path]: { text, dirty: false } }))
-        } catch (err) {
-          toast(err instanceof Error ? err.message : String(err), 'error')
-        }
+  const loadDoc = useCallback(
+    async (path: string) => {
+      try {
+        const text = await window.api.fs.read(path)
+        setDocs((d) => ({ ...d, [path]: { text, dirty: false } }))
+      } catch (err) {
+        toast(err instanceof Error ? err.message : String(err), 'error')
       }
     },
-    [docs, toast]
+    [toast]
   )
+
+  const openFile = useCallback(
+    (path: string, name: string) => {
+      setActive(path)
+      addOpenFile({ path, name })
+      if (!docs[path]) void loadDoc(path)
+    },
+    [docs, addOpenFile, loadDoc]
+  )
+
+  // After a restore, default the active tab and lazily load its content.
+  useEffect(() => {
+    if (!active && openFiles.length) setActive(openFiles[openFiles.length - 1].path)
+  }, [openFiles, active])
+  useEffect(() => {
+    if (active && !docs[active]) void loadDoc(active)
+  }, [active, docs, loadDoc])
 
   const save = useCallback(
     async (path: string) => {
@@ -55,10 +60,10 @@ export function FilesView({
   )
 
   const closeTab = (path: string): void => {
-    setTabs((t) => t.filter((x) => x.path !== path))
+    removeOpenFile(path)
     setActive((cur) => {
       if (cur !== path) return cur
-      const remaining = tabs.filter((x) => x.path !== path)
+      const remaining = openFiles.filter((x) => x.path !== path)
       return remaining.length ? remaining[remaining.length - 1].path : null
     })
   }
@@ -85,7 +90,7 @@ export function FilesView({
                 key={f.id}
                 className="card"
                 style={{ cursor: 'pointer' }}
-                onClick={() => onPickTarget({ path: f.path, name: f.name })}
+                onClick={() => setFilesTarget({ path: f.path, name: f.name })}
               >
                 <strong>{f.name}</strong>
                 <div className="faint" style={{ fontSize: 11 }}>
@@ -106,30 +111,31 @@ export function FilesView({
     <div className="files-layout">
       <FileTree root={target.path} rootName={target.name} selectedPath={active} onOpenFile={openFile} />
       <div className="editor-area">
-        {tabs.length > 0 && (
-          <div className="editor-tabs">
-            {tabs.map((tab) => (
-              <div
-                key={tab.path}
-                className={`editor-tab ${active === tab.path ? 'active' : ''}`}
-                onClick={() => setActive(tab.path)}
-              >
-                {docs[tab.path]?.dirty && <span className="dirty" />}
-                <span>{tab.name}</span>
-                <span
-                  className="icon-btn"
-                  style={{ padding: 0 }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    closeTab(tab.path)
-                  }}
-                >
-                  ✕
-                </span>
-              </div>
-            ))}
+        <div className="editor-tabs">
+          <div className="editor-tab" onClick={() => setFilesTarget(null)} title="Back to folder list">
+            ‹ Folders
           </div>
-        )}
+          {openFiles.map((tab) => (
+            <div
+              key={tab.path}
+              className={`editor-tab ${active === tab.path ? 'active' : ''}`}
+              onClick={() => setActive(tab.path)}
+            >
+              {docs[tab.path]?.dirty && <span className="dirty" />}
+              <span>{tab.name}</span>
+              <span
+                className="icon-btn"
+                style={{ padding: 0 }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  closeTab(tab.path)
+                }}
+              >
+                ✕
+              </span>
+            </div>
+          ))}
+        </div>
         {active && docs[active] ? (
           <FileEditor
             key={active}

@@ -9,12 +9,17 @@ import type {
   PersistedState,
   Project,
   SavedCommand,
+  SessionSnapshot,
+  SessionState,
+  SnapshotMeta,
   SshBuildResult,
   SshConfig,
   TerminalSession,
   Tool,
   UpdateCheckResult
 } from './types'
+
+export type MenuAction = 'new-temp' | 'new-disk' | 'open' | 'save' | 'save-as' | 'open-path'
 
 /** The full surface exposed to the renderer as `window.api`. */
 export interface IdeTermApi {
@@ -28,9 +33,22 @@ export interface IdeTermApi {
     save(tool: Tool): Promise<Tool[]>
     remove(id: string): Promise<Tool[]>
   }
-  projects: {
-    save(project: Project): Promise<Project[]>
-    remove(id: string): Promise<Project[]>
+  session: {
+    state(): Promise<SessionState>
+    read(path: string): Promise<SessionSnapshot>
+    write(snapshot: SessionSnapshot, path: string): Promise<SessionSnapshot>
+    tempPath(): Promise<string>
+    recent(): Promise<SnapshotMeta[]>
+    setRoots(projects: Project[]): Promise<void>
+    setRestoreMode(mode: 'ask' | 'last'): Promise<void>
+    setDir(dir: string): Promise<void>
+    saveDialog(defaultName: string): Promise<string | null>
+    openDialog(): Promise<string | null>
+    /** Subscribe to native File-menu actions; returns an unsubscribe fn. */
+    onMenu(cb: (action: MenuAction, arg?: string) => void): () => void
+    /** Main asks the renderer to persist before the window closes. */
+    onFlush(cb: () => void): () => void
+    flushDone(): void
   }
   dialog: {
     pickFolder(): Promise<string | null>

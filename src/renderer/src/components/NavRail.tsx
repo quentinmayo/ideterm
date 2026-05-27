@@ -3,7 +3,7 @@ export type ViewKey = 'projects' | 'tools' | 'sessions' | 'files' | 'settings'
 const ITEMS: { key: ViewKey; label: string; icon: string }[] = [
   { key: 'projects', label: 'Projects', icon: '📁' },
   { key: 'tools', label: 'Tools', icon: '🧰' },
-  { key: 'sessions', label: 'Sessions', icon: '▦' },
+  { key: 'sessions', label: 'Terminals', icon: '▦' },
   { key: 'files', label: 'Files', icon: '🗂' },
   { key: 'settings', label: 'Settings', icon: '⚙' }
 ]

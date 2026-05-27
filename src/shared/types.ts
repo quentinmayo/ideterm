@@ -108,12 +108,88 @@ export interface AppSettings {
   terminalDockVisible: boolean
 }
 
+/** Where session snapshots live and how startup behaves (global, app-wide). */
+export interface SnapshotsConfig {
+  /** Default directory new on-disk snapshots are created in. */
+  dir: string
+  /** Most-recent-first list of snapshot file paths. */
+  recent: string[]
+  /** Path of the last-open snapshot (the working one). */
+  lastOpened: string | null
+  /** Startup behavior: show the launcher, or auto-open the most recent. */
+  restoreMode: 'ask' | 'last'
+  /** False while the app is running; set true on graceful quit (abrupt-close detection). */
+  cleanShutdown: boolean
+}
+
 export interface PersistedState {
   version: number
-  projects: Project[]
   tools: Tool[]
   savedCommands: SavedCommand[]
   settings: AppSettings
+  snapshots: SnapshotsConfig
+}
+
+export type SnapshotView = 'projects' | 'tools' | 'sessions' | 'files' | 'settings'
+
+/** A tile in a serialized terminal layout — leaves describe how to re-spawn the pty. */
+export type SerializedTile =
+  | { kind: 'leaf'; cwd: string; shell: string; title: string; toolId?: string }
+  | { kind: 'split'; dir: 'row' | 'col'; children: SerializedTile[] }
+
+export interface SerializedGroup {
+  name: string
+  tree: SerializedTile
+}
+
+export interface SerializedFloating {
+  cwd: string
+  shell: string
+  title: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** The open, serializable UI state captured in a snapshot. */
+export interface SessionUiState {
+  activeView: SnapshotView
+  selectedProjectId: string | null
+  filesTarget: { path: string; name: string } | null
+  openFiles: { path: string; name: string }[]
+  terminals: SerializedGroup[]
+  floating: SerializedFloating[]
+  dockVisible: boolean
+  dockHeight: number
+}
+
+/** A full workspace snapshot persisted to a file on disk. */
+export interface SessionSnapshot {
+  version: number
+  name: string
+  createdAt: number
+  updatedAt: number
+  projects: Project[]
+  ui: SessionUiState
+}
+
+/** Metadata about a snapshot file for the launcher's recent list. */
+export interface SnapshotMeta {
+  path: string
+  name: string
+  updatedAt: number | null
+  exists: boolean
+}
+
+/** Snapshot subsystem state surfaced to the renderer at startup. */
+export interface SessionState {
+  dir: string
+  lastOpened: string | null
+  restoreMode: 'ask' | 'last'
+  recent: SnapshotMeta[]
+  wasAbruptShutdown: boolean
+  tempPath: string
 }
 
 /** Runtime descriptor for a live pty-backed terminal session. */

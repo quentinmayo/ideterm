@@ -14,7 +14,7 @@ export function SessionsView(): JSX.Element {
     <div className="view-inner">
       <div className="page-head">
         <div>
-          <h1>Sessions</h1>
+          <h1>Terminals</h1>
           <div className="sub">Every embedded terminal, across all dock tabs and floating panels.</div>
         </div>
         <button className="btn primary" onClick={() => void terminals.newTerminal()}>

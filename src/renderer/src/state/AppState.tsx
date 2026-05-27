@@ -7,18 +7,15 @@ import {
   useState,
   type ReactNode
 } from 'react'
-import type { AppSettings, Project, SavedCommand, Tool } from '@shared/types'
+import type { AppSettings, SavedCommand, Tool } from '@shared/types'
 import { useToast } from '../components/Toast'
 
 interface AppStateValue {
   ready: boolean
-  projects: Project[]
   tools: Tool[]
   savedCommands: SavedCommand[]
   settings: AppSettings
   reloadTools: () => Promise<void>
-  saveProject: (p: Project) => Promise<void>
-  removeProject: (id: string) => Promise<void>
   saveTool: (t: Tool) => Promise<void>
   removeTool: (id: string) => Promise<void>
   saveCommand: (c: SavedCommand) => Promise<void>
@@ -44,7 +41,6 @@ const fallbackSettings: AppSettings = {
 export function AppStateProvider({ children }: { children: ReactNode }): JSX.Element {
   const toast = useToast()
   const [ready, setReady] = useState(false)
-  const [projects, setProjects] = useState<Project[]>([])
   const [tools, setTools] = useState<Tool[]>([])
   const [savedCommands, setSavedCommands] = useState<SavedCommand[]>([])
   const [settings, setSettings] = useState<AppSettings>(fallbackSettings)
@@ -57,7 +53,6 @@ export function AppStateProvider({ children }: { children: ReactNode }): JSX.Ele
     void (async () => {
       try {
         const state = await window.api.store.getState()
-        setProjects(state.projects)
         setSavedCommands(state.savedCommands)
         setSettings(state.settings)
         setTools(await window.api.tools.list())
@@ -68,13 +63,6 @@ export function AppStateProvider({ children }: { children: ReactNode }): JSX.Ele
       }
     })()
   }, [toast])
-
-  const saveProject = useCallback(async (p: Project) => {
-    setProjects(await window.api.projects.save(p))
-  }, [])
-  const removeProject = useCallback(async (id: string) => {
-    setProjects(await window.api.projects.remove(id))
-  }, [])
 
   const saveTool = useCallback(
     async (t: Tool) => {
@@ -105,13 +93,10 @@ export function AppStateProvider({ children }: { children: ReactNode }): JSX.Ele
   const value = useMemo<AppStateValue>(
     () => ({
       ready,
-      projects,
       tools,
       savedCommands,
       settings,
       reloadTools,
-      saveProject,
-      removeProject,
       saveTool,
       removeTool,
       saveCommand,
@@ -120,13 +105,10 @@ export function AppStateProvider({ children }: { children: ReactNode }): JSX.Ele
     }),
     [
       ready,
-      projects,
       tools,
       savedCommands,
       settings,
       reloadTools,
-      saveProject,
-      removeProject,
       saveTool,
       removeTool,
       saveCommand,

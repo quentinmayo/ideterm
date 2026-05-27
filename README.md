@@ -103,6 +103,15 @@ flags, remote command), then run it in an embedded terminal or save it for reuse
 honest warning that the session is **local-terminal-only** (your IDEs and agents are *not* magically
 teleported onto the remote box).
 
+### 💾 Workspace snapshots (Burp-style)
+Your whole working context — Projects, open file tabs, the terminal tiling layout (re-spawned at
+their cwds), active view, dock & floating panels — is saved as a **session snapshot** file you can
+reopen anytime. A startup **launcher** lets you create a *temporary* session, a *new project on
+disk*, *open an existing* one, or jump back into the most recent. Snapshots **autosave every minute**
+and on close; if the app crashes, the launcher offers to **restore** your last session. Drive it all
+from the **File menu** (New / Open / Save / Save As / Recent) or set "always open the most recent" in
+Settings. Tools and preferences stay global across every snapshot.
+
 ---
 
 ## 🖼️ The layout
@@ -209,10 +218,10 @@ assembly, launch-command building, the path-sandbox guards, and the terminal til
 ## 🗺️ Roadmap
 
 - Project-wide search and per-tool environment overrides
-- Session persistence/restore across restarts
 - Production CSP hardening
 - Git stash / branch-switch UI
 - Theming and a plugin API
+- Code signing (remove SmartScreen/Gatekeeper warnings)
 
 ## 🤝 Contributing
 
