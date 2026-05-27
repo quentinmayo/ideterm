@@ -13,6 +13,7 @@ publish:
   provider: github
   owner: quentinmayo
   repo: ideterm
+  releaseType: release
 win:
   icon: build/icon.ico
   target:
