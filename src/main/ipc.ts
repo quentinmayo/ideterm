@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type {
   AppSettings,
   CreateTerminalOptions,
@@ -14,6 +14,7 @@ import * as fsSvc from './services/fs'
 import { buildSshCommand } from './services/ssh'
 import { launchCommand, launchTool } from './services/launcher'
 import { ptyManager } from './services/pty'
+import { checkForUpdates } from './services/updates'
 
 export function registerIpc(win: BrowserWindow): void {
   ptyManager.setSender(win.webContents)
@@ -95,4 +96,9 @@ export function registerIpc(win: BrowserWindow): void {
 
   // --- ssh ---
   ipcMain.handle('ssh:build', (_e, config: SshConfig) => buildSshCommand(config))
+
+  // --- app + updates ---
+  ipcMain.handle('app:version', () => app.getVersion())
+  ipcMain.handle('app:openExternal', (_e, url: string) => shell.openExternal(url))
+  ipcMain.handle('updates:check', () => checkForUpdates())
 }

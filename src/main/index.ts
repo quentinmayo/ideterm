@@ -20,6 +20,8 @@ function createWindow(): void {
     backgroundColor: '#0d0e12',
     title: "Mayo's IdeTerm",
     autoHideMenuBar: true,
+    // In dev, use the repo icon; packaged builds embed it via electron-builder.
+    ...(isDev ? { icon: join(baseDir, '../../build/icon.png') } : {}),
     webPreferences: {
       preload: join(baseDir, '../preload/index.mjs'),
       sandbox: false,

@@ -8,19 +8,34 @@ files:
   - package.json
 asarUnpack:
   - "**/*.node"
-  - node_modules/node-pty/**/*
+  - node_modules/@lydell/**/*
+publish:
+  provider: github
+  owner: quentinmayo
+  repo: ideterm
 win:
+  icon: build/icon.ico
   target:
     - nsis
-  artifactName: ${productName}-${version}-setup.${ext}
+  artifactName: IdeTerm-${version}-Setup.${ext}
 nsis:
   oneClick: false
+  perMachine: false
   allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
 mac:
+  icon: build/icon.png
   target:
     - dmg
+    - zip
+  artifactName: IdeTerm-${version}-${arch}.${ext}
   category: public.app-category.developer-tools
 linux:
+  icon: build/icon.png
   target:
     - AppImage
+    - deb
+  artifactName: IdeTerm-${version}.${ext}
   category: Development
+  maintainer: Quentin Mayo

@@ -152,6 +152,18 @@ export interface ActionResult {
   message: string
 }
 
+export interface UpdateCheckResult {
+  currentVersion: string
+  latestVersion: string | null
+  hasUpdate: boolean
+  /** Release page (or releases list) to open for download. */
+  url: string | null
+  publishedAt: string | null
+  notes: string | null
+  /** Set when the check could not complete (offline, no releases yet, rate limited). */
+  error?: string
+}
+
 export interface SshConfig {
   host: string
   user?: string

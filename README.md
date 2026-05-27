@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🍯 Mayo's IdeTerm
+<img src="build/icon.png" width="128" alt="Mayo's IdeTerm icon" />
+
+# Mayo's IdeTerm
 
 ### One control center for your IDEs, terminals, repos, and coding agents.
 
@@ -15,6 +17,22 @@
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 </div>
+
+---
+
+## ⬇️ Download & install
+
+Grab the latest installer for your OS from the [**Releases**](https://github.com/quentinmayo/ideterm/releases) page:
+
+| OS | File | Notes |
+|---|---|---|
+| 🪟 **Windows** | `IdeTerm-x.y.z-Setup.exe` | NSIS installer — pick your install directory, gets Start-menu + desktop shortcuts. |
+| 🍎 **macOS** | `IdeTerm-x.y.z-<arch>.dmg` | Drag to Applications. |
+| 🐧 **Linux** | `IdeTerm-x.y.z.AppImage` / `.deb` | `chmod +x` the AppImage and run, or install the `.deb`. |
+
+> Builds are currently **unsigned**, so Windows SmartScreen / macOS Gatekeeper may warn on first launch
+> (More info → Run anyway / right-click → Open). In-app **Settings → Check for updates** tells you when a
+> newer release is out.
 
 ---
 

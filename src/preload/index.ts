@@ -72,6 +72,13 @@ const api: IdeTermApi = {
   },
   ssh: {
     build: (config) => ipcRenderer.invoke('ssh:build', config)
+  },
+  app: {
+    version: () => ipcRenderer.invoke('app:version'),
+    openExternal: (url) => ipcRenderer.invoke('app:openExternal', url)
+  },
+  updates: {
+    check: () => ipcRenderer.invoke('updates:check')
   }
 }
 

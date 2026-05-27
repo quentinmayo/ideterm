@@ -12,7 +12,8 @@ import type {
   SshBuildResult,
   SshConfig,
   TerminalSession,
-  Tool
+  Tool,
+  UpdateCheckResult
 } from './types'
 
 /** The full surface exposed to the renderer as `window.api`. */
@@ -80,5 +81,12 @@ export interface IdeTermApi {
   }
   ssh: {
     build(config: SshConfig): Promise<SshBuildResult>
+  }
+  app: {
+    version(): Promise<string>
+    openExternal(url: string): Promise<void>
+  }
+  updates: {
+    check(): Promise<UpdateCheckResult>
   }
 }
