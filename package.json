@@ -1,6 +1,6 @@
 {
   "name": "ideterm",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Mayo's IdeTerm — one control center for your IDEs, terminals, repos, and coding agents.",
   "main": "./out/main/index.js",
   "author": "Quentin Mayo",

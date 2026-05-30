@@ -138,6 +138,28 @@ export interface GitFileChange {
   untracked: boolean
 }
 
+/** Lightweight GitHub repository info for clone/search workflows. */
+export interface GithubRepoSummary {
+  fullName: string
+  name: string
+  owner: string
+  description?: string
+  private: boolean
+  url: string
+  sshUrl?: string
+  defaultBranch?: string
+  updatedAt?: string
+}
+
+/** State of a local path used by the GitHub clone wizard. */
+export interface GitPathState {
+  path: string
+  exists: boolean
+  isGitRepo: boolean
+  branch?: string | null
+  remote?: string | null
+}
+
 export interface SavedCommand {
   id: string
   label: string

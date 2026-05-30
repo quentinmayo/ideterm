@@ -6,7 +6,9 @@ import type {
   RecentLaunch,
   FileEntry,
   GitFileChange,
+  GitPathState,
   GitStatus,
+  GithubRepoSummary,
   LaunchResult,
   PersistedState,
   Project,
@@ -71,6 +73,11 @@ export interface IdeTermApi {
     diff(path: string, file: string): Promise<string>
     branches(path: string): Promise<string[]>
     remote(path: string): Promise<string | null>
+    githubList(limit?: number): Promise<GithubRepoSummary[]>
+    githubSearch(query: string, limit?: number): Promise<GithubRepoSummary[]>
+    githubClone(repo: string, destinationPath: string): Promise<ActionResult>
+    inspectPath(path: string): Promise<GitPathState>
+    createBranchFromMain(path: string, branchName: string): Promise<ActionResult>
   }
   launch: {
     tool(toolId: string, folderPath?: string, modeId?: string): Promise<LaunchResult>

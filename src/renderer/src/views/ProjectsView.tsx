@@ -9,6 +9,7 @@ import { Modal } from '../components/Modal'
 import { ContextMenu, type MenuItem } from '../components/ContextMenu'
 import { FolderCard } from '../components/FolderCard'
 import { GitPanel } from '../components/GitPanel'
+import { GithubCloneWizard } from '../components/GithubCloneWizard'
 import { SubfolderPicker } from '../components/SubfolderPicker'
 import type { FilesTarget } from '../App'
 
@@ -28,6 +29,7 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
   const toast = useToast()
   const [editing, setEditing] = useState<Project | null>(null)
   const [gitFolder, setGitFolder] = useState<{ path: string; name: string } | null>(null)
+  const [githubProject, setGithubProject] = useState<Project | null>(null)
   const [subfolderTarget, setSubfolderTarget] = useState<ProjectFolder | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
   const [globalFolderQuery, setGlobalFolderQuery] = useState('')
@@ -52,6 +54,7 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
 
   const projectMenu = (p: Project): MenuItem[] => [
     { icon: '✏️', label: 'Edit project…', onClick: () => setEditing(p) },
+    { icon: '🐙', label: 'GitHub clone…', onClick: () => setGithubProject(p) },
     { icon: '➕', label: 'New project', onClick: () => setEditing(blankProject()) },
     { separator: true },
     {
@@ -148,6 +151,16 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
     await saveProject({ ...selected, folders: [...base, ...additions] })
     toast(`Added ${additions.length} folder${additions.length === 1 ? '' : 's'}`, 'success')
     setSubfolderTarget(null)
+  }
+
+  const ensureFolderInProject = async (projectId: string, folderPath: string, folderName: string): Promise<void> => {
+    const latest = projects.find((p) => p.id === projectId)
+    if (!latest) return
+    if (latest.folders.some((f) => f.path.toLowerCase() === folderPath.toLowerCase())) return
+    await saveProject({
+      ...latest,
+      folders: [...latest.folders, { id: crypto.randomUUID(), path: folderPath, name: folderName || baseName(folderPath) }]
+    })
   }
 
   const openFolderFromGlobalSearch = (project: Project, folder: ProjectFolder): void => {
@@ -410,6 +423,14 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
           existingPaths={selected.folders.map((f) => f.path)}
           onClose={() => setSubfolderTarget(null)}
           onConfirm={(paths, removeParent) => void addSubfolders(paths, removeParent)}
+        />
+      )}
+      {githubProject && (
+        <GithubCloneWizard
+          project={githubProject}
+          onClose={() => setGithubProject(null)}
+          onEnsureFolder={(path, name) => ensureFolderInProject(githubProject.id, path, name)}
+          onOpenFiles={onOpenFiles}
         />
       )}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}

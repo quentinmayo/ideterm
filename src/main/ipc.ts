@@ -96,6 +96,15 @@ export function registerIpc(win: BrowserWindow, onSessionRecentsChanged?: () => 
   ipcMain.handle('git:diff', (_e, path: string, file: string) => gitSvc.diff(path, file))
   ipcMain.handle('git:branches', (_e, path: string) => gitSvc.branches(path))
   ipcMain.handle('git:remote', (_e, path: string) => gitSvc.getRemote(path))
+  ipcMain.handle('git:github-list', (_e, limit?: number) => gitSvc.githubList(limit))
+  ipcMain.handle('git:github-search', (_e, query: string, limit?: number) => gitSvc.githubSearch(query, limit))
+  ipcMain.handle('git:github-clone', (_e, repo: string, destinationPath: string) =>
+    gitSvc.githubClone(repo, destinationPath)
+  )
+  ipcMain.handle('git:inspect-path', (_e, path: string) => gitSvc.inspectPath(path))
+  ipcMain.handle('git:create-branch-from-main', (_e, path: string, branchName: string) =>
+    gitSvc.createBranchFromMain(path, branchName)
+  )
 
   // --- launching ---
   ipcMain.handle('launch:tool', (_e, toolId: string, folderPath?: string) => launchTool(toolId, folderPath))

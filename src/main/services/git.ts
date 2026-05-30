@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { simpleGit, type SimpleGit } from 'simple-git'
-import type { ActionResult, GitFileChange, GitStatus } from '@shared/types'
+import type { ActionResult, GitFileChange, GitPathState, GithubRepoSummary, GitStatus } from '@shared/types'
 
 function git(path: string): SimpleGit {
   return simpleGit({ baseDir: path, maxConcurrentProcesses: 4 })
@@ -164,5 +165,144 @@ export async function getRemote(path: string): Promise<string | null> {
     return origin?.refs?.fetch || origin?.refs?.push || null
   } catch {
     return null
+  }
+}
+
+function runGh(args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('gh', args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
+    let out = ''
+    let err = ''
+    child.stdout.on('data', (d) => (out += String(d)))
+    child.stderr.on('data', (d) => (err += String(d)))
+    child.on('error', (e) => reject(e))
+    child.on('close', (code) => {
+      if (code === 0) resolve(out)
+      else reject(new Error((err || out || `gh exited with code ${code}`).trim()))
+    })
+  })
+}
+
+function mapGithubRepo(r: Record<string, unknown>): GithubRepoSummary {
+  const ownerObj = (r.owner ?? {}) as { login?: string }
+  const defaultBranchObj = (r.defaultBranchRef ?? {}) as { name?: string }
+  return {
+    fullName: String(r.nameWithOwner ?? ''),
+    name: String(r.name ?? ''),
+    owner: String(ownerObj.login ?? ''),
+    description: (r.description ?? undefined) as string | undefined,
+    private: Boolean(r.isPrivate),
+    url: String(r.url ?? ''),
+    sshUrl: (r.sshUrl ?? undefined) as string | undefined,
+    defaultBranch: (defaultBranchObj.name ?? undefined) as string | undefined,
+    updatedAt: (r.updatedAt ?? undefined) as string | undefined
+  }
+}
+
+/** GitHub repos visible to the authenticated gh user. */
+export async function githubList(limit = 100): Promise<GithubRepoSummary[]> {
+  try {
+    const json = await runGh([
+      'repo',
+      'list',
+      '--limit',
+      String(Math.max(1, Math.min(limit, 500))),
+      '--json',
+      'name,nameWithOwner,description,isPrivate,url,sshUrl,defaultBranchRef,updatedAt,owner'
+    ])
+    return (JSON.parse(json) as Record<string, unknown>[]).map(mapGithubRepo).filter((r) => !!r.fullName)
+  } catch {
+    return []
+  }
+}
+
+/** Search GitHub repos (includes org/private repos the user can access). */
+export async function githubSearch(query: string, limit = 50): Promise<GithubRepoSummary[]> {
+  if (!query.trim()) return githubList(limit)
+  try {
+    const json = await runGh([
+      'search',
+      'repos',
+      query,
+      '--limit',
+      String(Math.max(1, Math.min(limit, 200))),
+      '--json',
+      'name,nameWithOwner,description,isPrivate,url,sshUrl,defaultBranchRef,updatedAt,owner'
+    ])
+    return (JSON.parse(json) as Record<string, unknown>[]).map(mapGithubRepo).filter((r) => !!r.fullName)
+  } catch {
+    return []
+  }
+}
+
+/** Inspect whether a target path exists and if it's already a git repo. */
+export async function inspectPath(path: string): Promise<GitPathState> {
+  const exists = existsSync(path)
+  if (!exists) return { path, exists: false, isGitRepo: false }
+  try {
+    const g = git(path)
+    if (!(await g.checkIsRepo())) return { path, exists: true, isGitRepo: false }
+    const b = await g.branchLocal()
+    return {
+      path,
+      exists: true,
+      isGitRepo: true,
+      branch: b.current ?? null,
+      remote: await getRemote(path)
+    }
+  } catch {
+    return { path, exists: true, isGitRepo: false }
+  }
+}
+
+/** Clone via gh for owner/repo inputs; falls back to git clone for URLs. */
+export async function githubClone(repo: string, destinationPath: string): Promise<ActionResult> {
+  if (!repo.trim()) return { ok: false, message: 'Repository is required' }
+  if (!destinationPath.trim()) return { ok: false, message: 'Destination path is required' }
+  if (existsSync(destinationPath)) return { ok: false, message: 'Destination already exists' }
+  try {
+    if (repo.includes('://') || repo.startsWith('git@')) {
+      await simpleGit().clone(repo.trim(), destinationPath)
+    } else {
+      await runGh(['repo', 'clone', repo.trim(), destinationPath, '--'])
+    }
+    return { ok: true, message: `Cloned into ${destinationPath}` }
+  } catch (err) {
+    return fail(err)
+  }
+}
+
+/** Create and checkout a new local branch off main (or origin/main fallback). */
+export async function createBranchFromMain(path: string, branchName: string): Promise<ActionResult> {
+  if (!branchName.trim()) return { ok: false, message: 'Branch name is required' }
+  try {
+    const g = git(path)
+    if (!(await g.checkIsRepo())) return { ok: false, message: 'Target path is not a git repository' }
+    try {
+      await g.fetch('origin')
+    } catch {
+      /* continue with local refs */
+    }
+    const local = await g.branchLocal()
+    if (local.all.includes(branchName)) return { ok: false, message: `Branch "${branchName}" already exists` }
+    if (local.all.includes('main')) {
+      await g.checkout('main')
+      try {
+        await g.pull('origin', 'main')
+      } catch {
+        /* offline/no origin is okay */
+      }
+    } else {
+      // Create local main from origin/main if possible.
+      try {
+        await g.checkout(['-b', 'main', 'origin/main'])
+      } catch {
+        // Fall back to current HEAD when origin/main is unavailable.
+      }
+    }
+    await g.checkoutLocalBranch(branchName)
+    return { ok: true, message: `Created and switched to ${branchName}` }
+  } catch (err) {
+    return fail(err)
   }
 }

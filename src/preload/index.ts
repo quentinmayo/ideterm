@@ -68,7 +68,12 @@ const api: IdeTermApi = {
     fetch: (path) => ipcRenderer.invoke('git:fetch', path),
     diff: (path, file) => ipcRenderer.invoke('git:diff', path, file),
     branches: (path) => ipcRenderer.invoke('git:branches', path),
-    remote: (path) => ipcRenderer.invoke('git:remote', path)
+    remote: (path) => ipcRenderer.invoke('git:remote', path),
+    githubList: (limit) => ipcRenderer.invoke('git:github-list', limit),
+    githubSearch: (query, limit) => ipcRenderer.invoke('git:github-search', query, limit),
+    githubClone: (repo, destinationPath) => ipcRenderer.invoke('git:github-clone', repo, destinationPath),
+    inspectPath: (path) => ipcRenderer.invoke('git:inspect-path', path),
+    createBranchFromMain: (path, branchName) => ipcRenderer.invoke('git:create-branch-from-main', path, branchName)
   },
   launch: {
     tool: (toolId, folderPath, modeId) => ipcRenderer.invoke('launch:tool', toolId, folderPath, modeId),
