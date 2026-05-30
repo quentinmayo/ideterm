@@ -1,7 +1,8 @@
-export type ViewKey = 'projects' | 'tools' | 'sessions' | 'files' | 'settings'
+export type ViewKey = 'projects' | 'favorites' | 'tools' | 'sessions' | 'files' | 'settings'
 
 const ITEMS: { key: ViewKey; label: string; icon: string }[] = [
   { key: 'projects', label: 'Projects', icon: '📁' },
+  { key: 'favorites', label: 'Favorites', icon: '⭐' },
   { key: 'tools', label: 'Tools', icon: '🧰' },
   { key: 'sessions', label: 'Terminals', icon: '▦' },
   { key: 'files', label: 'Files', icon: '🗂' },

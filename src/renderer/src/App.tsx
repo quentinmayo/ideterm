@@ -1,12 +1,14 @@
 import { useEffect } from 'react'
 import { NavRail } from './components/NavRail'
 import { SnapshotLauncher } from './components/SnapshotLauncher'
+import { StatusBar } from './components/StatusBar'
 import { useAppState } from './state/AppState'
 import { useSession } from './state/Session'
 import { useTerminals } from './state/Terminals'
 import { TerminalDock } from './terminal/TerminalDock'
 import { FloatingLayer } from './terminal/FloatingPanel'
 import { ProjectsView } from './views/ProjectsView'
+import { FavoritesView } from './views/FavoritesView'
 import { ToolsView } from './views/ToolsView'
 import { SessionsView } from './views/SessionsView'
 import { FilesView } from './views/FilesView'
@@ -59,12 +61,14 @@ export default function App(): JSX.Element {
       <div className="main">
         <div className="view">
           {view === 'projects' && <ProjectsView onOpenFiles={openFiles} />}
+          {view === 'favorites' && <FavoritesView />}
           {view === 'tools' && <ToolsView />}
           {view === 'sessions' && <SessionsView />}
           {view === 'files' && <FilesView />}
           {view === 'settings' && <SettingsView />}
         </div>
         <TerminalDock />
+        <StatusBar />
       </div>
       <FloatingLayer />
     </div>

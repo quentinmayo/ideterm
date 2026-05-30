@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename } from 'node:path'
-import type { LaunchResult, Tool } from '@shared/types'
+import type { ActionResult, LaunchResult, Tool } from '@shared/types'
 import { defaultShell, listTools } from './tools'
 import { ptyManager } from './pty'
 import { buildCommandLine, effectiveTool, resolveLaunchMode } from './launchCommand'
@@ -69,6 +69,46 @@ export async function launchTool(
     return { kind: 'terminal', ok: true, message: `Running ${tool.name}`, session }
   } catch (err) {
     return { kind: 'terminal', ok: false, message: String(err instanceof Error ? err.message : err) }
+  }
+}
+
+/** Open an external OS terminal window at cwd running the given command (best-effort per platform). */
+export function launchExternalCommand(command: string, cwd?: string): ActionResult {
+  const dir = cwd && existsSync(cwd) ? cwd : homedir()
+  try {
+    if (process.platform === 'win32') {
+      // cmd's `start` builtin opens a new console window; /k keeps it open after the command.
+      spawn('cmd.exe', ['/c', 'start', "Mayo's IdeTerm", 'cmd', '/k', command], {
+        cwd: dir,
+        detached: true,
+        windowsHide: false
+      }).unref()
+    } else if (process.platform === 'darwin') {
+      const script = `tell application "Terminal" to do script "cd ${JSON.stringify(dir)} && ${command}"`
+      spawn('osascript', ['-e', script], { detached: true }).unref()
+    } else {
+      // Linux: try common terminal emulators until one launches.
+      const candidates: [string, string[]][] = [
+        ['x-terminal-emulator', ['-e', 'bash', '-lc', `${command}; exec bash`]],
+        ['gnome-terminal', [`--working-directory=${dir}`, '--', 'bash', '-lc', `${command}; exec bash`]],
+        ['konsole', ['--workdir', dir, '-e', 'bash', '-lc', `${command}; exec bash`]],
+        ['xterm', ['-e', `bash -lc '${command}; exec bash'`]]
+      ]
+      let launched = false
+      for (const [bin, args] of candidates) {
+        try {
+          spawn(bin, args, { cwd: dir, detached: true }).unref()
+          launched = true
+          break
+        } catch {
+          /* try next */
+        }
+      }
+      if (!launched) return { ok: false, message: 'No supported terminal emulator found' }
+    }
+    return { ok: true, message: 'Launched in external terminal' }
+  } catch (err) {
+    return { ok: false, message: `Failed to launch external terminal: ${String(err)}` }
   }
 }
 

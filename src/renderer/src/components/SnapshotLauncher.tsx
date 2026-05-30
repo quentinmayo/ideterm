@@ -1,4 +1,6 @@
 import { useSession } from '../state/Session'
+import { useAppState } from '../state/AppState'
+import { useLauncher } from '../util/launch'
 
 function timeAgo(ms: number | null): string {
   if (!ms) return ''
@@ -11,6 +13,8 @@ function timeAgo(ms: number | null): string {
 
 export function SnapshotLauncher(): JSX.Element {
   const session = useSession()
+  const { favCommands, recentLaunches } = useAppState()
+  const { runFav, runRecent } = useLauncher()
   const st = session.sessionState
 
   return (
@@ -47,6 +51,26 @@ export function SnapshotLauncher(): JSX.Element {
               📂 Open existing…
             </button>
           </div>
+
+          {(favCommands.length > 0 || recentLaunches.length > 0) && (
+            <>
+              <div className="git-section-title">
+                <span>Quick start</span>
+              </div>
+              <div className="row" style={{ flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                {favCommands.map((f) => (
+                  <button key={f.id} className="btn" title={`${f.command} · ${f.cwd}`} onClick={() => void runFav(f)}>
+                    <span>{f.icon ?? '⭐'}</span> {f.label}
+                  </button>
+                ))}
+                {recentLaunches.slice(0, 8).map((r) => (
+                  <button key={r.id} className="btn ghost" title={`${r.command ?? ''} ${r.cwd ?? ''}`} onClick={() => void runRecent(r)}>
+                    <span>{r.icon ?? (r.kind === 'fav' ? '⭐' : '🧩')}</span> {r.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           <div className="git-section-title">
             <span>Recent sessions</span>

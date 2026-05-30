@@ -2,6 +2,8 @@ import type {
   ActionResult,
   AppSettings,
   CreateTerminalOptions,
+  FavCommand,
+  RecentLaunch,
   FileEntry,
   GitFileChange,
   GitStatus,
@@ -68,10 +70,12 @@ export interface IdeTermApi {
     fetch(path: string): Promise<ActionResult>
     diff(path: string, file: string): Promise<string>
     branches(path: string): Promise<string[]>
+    remote(path: string): Promise<string | null>
   }
   launch: {
     tool(toolId: string, folderPath?: string, modeId?: string): Promise<LaunchResult>
     command(command: string, cwd?: string, title?: string): Promise<LaunchResult>
+    externalCommand(command: string, cwd?: string): Promise<ActionResult>
   }
   pty: {
     create(opts: CreateTerminalOptions): Promise<TerminalSession>
@@ -88,6 +92,14 @@ export interface IdeTermApi {
   commands: {
     save(cmd: SavedCommand): Promise<SavedCommand[]>
     remove(id: string): Promise<SavedCommand[]>
+  }
+  favs: {
+    save(fav: FavCommand): Promise<FavCommand[]>
+    remove(id: string): Promise<FavCommand[]>
+  }
+  recents: {
+    add(entry: RecentLaunch): Promise<RecentLaunch[]>
+    clear(): Promise<RecentLaunch[]>
   }
   fs: {
     list(dir: string): Promise<FileEntry[]>

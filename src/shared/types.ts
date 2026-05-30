@@ -142,6 +142,23 @@ export interface SavedCommand {
   command: string
 }
 
+/**
+ * A one-click favorite: a command run at a specific path, either inside an
+ * embedded terminal or in an external terminal window. Shown on the welcome
+ * screen and the Favorites panel.
+ */
+export interface FavCommand {
+  id: string
+  label: string
+  icon?: string
+  /** Working directory the command runs in. */
+  cwd: string
+  /** The literal command to run. */
+  command: string
+  /** Where it runs: an embedded terminal pane, or an external terminal window. */
+  target: 'embedded' | 'external'
+}
+
 export interface AppSettings {
   theme: 'dark' | 'light'
   /** Default shell executable for new terminals (e.g. powershell.exe, pwsh, bash). */
@@ -166,15 +183,33 @@ export interface SnapshotsConfig {
   cleanShutdown: boolean
 }
 
+/** A record of a tool/fav we triggered, for the one-click "recent" buddies. */
+export interface RecentLaunch {
+  id: string
+  label: string
+  icon?: string
+  cwd?: string
+  at: number
+  kind: 'tool' | 'fav'
+  /** For kind 'tool'. */
+  toolId?: string
+  modeId?: string
+  /** For kind 'fav' (also lets it re-run even if the favorite was deleted). */
+  command?: string
+  target?: 'embedded' | 'external'
+}
+
 export interface PersistedState {
   version: number
   tools: Tool[]
   savedCommands: SavedCommand[]
+  favCommands: FavCommand[]
+  recentLaunches: RecentLaunch[]
   settings: AppSettings
   snapshots: SnapshotsConfig
 }
 
-export type SnapshotView = 'projects' | 'tools' | 'sessions' | 'files' | 'settings'
+export type SnapshotView = 'projects' | 'favorites' | 'tools' | 'sessions' | 'files' | 'settings'
 
 /** A tile in a serialized terminal layout — leaves describe how to re-spawn the pty. */
 export type SerializedTile =

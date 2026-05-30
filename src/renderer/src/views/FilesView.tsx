@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSession } from '../state/Session'
 import { useAppState } from '../state/AppState'
-import { useTerminals } from '../state/Terminals'
+import { useLauncher } from '../util/launch'
 import { useToast } from '../components/Toast'
 import { CommandPalette, type PaletteItem } from '../components/CommandPalette'
 import { FindReplacePanel } from '../components/FindReplacePanel'
@@ -16,7 +16,7 @@ interface OpenDoc {
 export function FilesView(): JSX.Element {
   const { projects, filesTarget: target, openFiles, setFilesTarget, addOpenFile, removeOpenFile } = useSession()
   const { tools } = useAppState()
-  const terminals = useTerminals()
+  const launcher = useLauncher()
   const toast = useToast()
   const [docs, setDocs] = useState<Record<string, OpenDoc>>({})
   const [active, setActive] = useState<string | null>(null)
@@ -89,9 +89,7 @@ export function FilesView(): JSX.Element {
   const launchTool = async (encodedId: string): Promise<void> => {
     if (!target) return
     const [toolId, modeId] = encodedId.split('@@')
-    const res = await window.api.launch.tool(toolId, target.path, modeId)
-    if (!res.ok) toast(res.message, 'error')
-    else if (res.kind === 'terminal' && res.session) terminals.adoptSession(res.session)
+    await launcher.launchTool(toolId, target.path, modeId)
   }
   const switchFolder = (path: string): void => {
     const found = projects.flatMap((p) => p.folders).find((f) => f.path === path)

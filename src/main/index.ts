@@ -1,10 +1,48 @@
-import { app, BrowserWindow, Menu, ipcMain, shell, type MenuItemConstructorOptions } from 'electron'
+import { app, BrowserWindow, dialog, Menu, ipcMain, shell, type MenuItemConstructorOptions } from 'electron'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { store } from './store'
 import { registerIpc } from './ipc'
 import { ptyManager } from './services/pty'
 import * as sessionSvc from './services/session'
+import { checkForUpdates } from './services/updates'
+
+const RELEASES_URL = 'https://github.com/quentinmayo/ideterm/releases'
+
+/** Run an update check and report via a native dialog (used by the Help menu). */
+async function runUpdateCheck(win: BrowserWindow): Promise<void> {
+  const r = await checkForUpdates()
+  if (r.hasUpdate) {
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Update available',
+      message: `Mayo's IdeTerm ${r.latestVersion} is available.`,
+      detail: `You're running ${r.currentVersion}.`,
+      buttons: ['Download', 'Later'],
+      defaultId: 0,
+      cancelId: 1
+    })
+    if (response === 0) shell.openExternal(r.url ?? RELEASES_URL)
+  } else if (r.error) {
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'warning',
+      title: 'Check for Updates',
+      message: 'Could not check for updates.',
+      detail: r.error,
+      buttons: ['View Releases', 'OK'],
+      defaultId: 1,
+      cancelId: 1
+    })
+    if (response === 0) shell.openExternal(r.url ?? RELEASES_URL)
+  } else {
+    await dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Check for Updates',
+      message: `You're on the latest version (${r.currentVersion}).`,
+      buttons: ['OK']
+    })
+  }
+}
 
 const baseDir = dirname(fileURLToPath(import.meta.url))
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
@@ -45,7 +83,26 @@ function buildMenu(win: BrowserWindow): void {
     { label: 'File', submenu: fileSubmenu },
     { role: 'editMenu' },
     { role: 'viewMenu' },
-    { role: 'windowMenu' }
+    { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        { label: 'Check for Updates…', click: () => void runUpdateCheck(win) },
+        { label: 'View Releases', click: () => shell.openExternal(RELEASES_URL) },
+        { type: 'separator' },
+        {
+          label: "About Mayo's IdeTerm",
+          click: () =>
+            void dialog.showMessageBox(win, {
+              type: 'info',
+              title: "About Mayo's IdeTerm",
+              message: "Mayo's IdeTerm",
+              detail: `Version ${app.getVersion()}\nOne control center for your IDEs, terminals, repos, and coding agents.`,
+              buttons: ['OK']
+            })
+        }
+      ]
+    }
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }

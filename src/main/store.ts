@@ -3,12 +3,16 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import type {
   AppSettings,
+  FavCommand,
   PersistedState,
   Project,
+  RecentLaunch,
   SavedCommand,
   SnapshotsConfig,
   Tool
 } from '@shared/types'
+
+const RECENT_LAUNCH_LIMIT = 12
 
 const STORE_VERSION = 2
 const RECENT_LIMIT = 20
@@ -31,9 +35,18 @@ function defaultState(): PersistedState {
     version: STORE_VERSION,
     tools: [],
     savedCommands: [],
+    favCommands: [],
+    recentLaunches: [],
     settings: defaultSettings(),
     snapshots: defaultSnapshots()
   }
+}
+
+/** Dedup key so re-running the same thing moves it to the top rather than duplicating. */
+function recentKey(r: RecentLaunch): string {
+  return r.kind === 'tool'
+    ? `tool:${r.toolId}:${r.modeId ?? ''}:${r.cwd ?? ''}`
+    : `fav:${r.command}:${r.cwd ?? ''}:${r.target ?? ''}`
 }
 
 /**
@@ -173,6 +186,36 @@ class Store {
     this.state.savedCommands = this.state.savedCommands.filter((c) => c.id !== id)
     await this.persist()
     return this.state.savedCommands
+  }
+
+  // --- favorite commands ---
+  async saveFav(fav: FavCommand): Promise<FavCommand[]> {
+    const i = this.state.favCommands.findIndex((f) => f.id === fav.id)
+    if (i >= 0) this.state.favCommands[i] = fav
+    else this.state.favCommands.push(fav)
+    await this.persist()
+    return this.state.favCommands
+  }
+
+  async removeFav(id: string): Promise<FavCommand[]> {
+    this.state.favCommands = this.state.favCommands.filter((f) => f.id !== id)
+    await this.persist()
+    return this.state.favCommands
+  }
+
+  // --- recent launches ---
+  async addRecentLaunch(entry: RecentLaunch): Promise<RecentLaunch[]> {
+    const key = recentKey(entry)
+    const deduped = this.state.recentLaunches.filter((r) => recentKey(r) !== key)
+    this.state.recentLaunches = [entry, ...deduped].slice(0, RECENT_LAUNCH_LIMIT)
+    await this.persist()
+    return this.state.recentLaunches
+  }
+
+  async clearRecentLaunches(): Promise<RecentLaunch[]> {
+    this.state.recentLaunches = []
+    await this.persist()
+    return this.state.recentLaunches
   }
 }
 

@@ -197,8 +197,9 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
     if (!path) return
     await window.api.session.write(collect(), path)
     setDirty(false)
+    toast(`Saved session "${name || 'session'}"`, 'success')
     void refreshState()
-  }, [path, collect, refreshState])
+  }, [path, collect, name, refreshState, toast])
 
   const saveAs = useCallback(async () => {
     const chosen = await window.api.session.saveDialog(`${name || 'workspace'}.ideterm-session.json`)
@@ -209,8 +210,9 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
     setName(newName)
     await window.api.session.write({ ...collect(), name: newName }, chosen)
     setDirty(false)
+    toast(`Saved session as "${newName}"`, 'success')
     void refreshState()
-  }, [name, collect, refreshState])
+  }, [name, collect, refreshState, toast])
 
   const setRestoreMode = useCallback(
     async (mode: 'ask' | 'last') => {

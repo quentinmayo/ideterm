@@ -282,6 +282,18 @@ textarea {
   gap: 12px;
 }
 
+/* ---------- Fav cards ---------- */
+.fav-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+.fav-card:hover {
+  border-color: var(--accent);
+}
+
 /* ---------- Badges ---------- */
 .badge {
   display: inline-flex;
@@ -512,6 +524,64 @@ textarea {
   font-size: 12px;
   line-height: 1.5;
   margin-bottom: 14px;
+}
+
+/* ---------- Status bar ---------- */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0 4px 0 10px;
+  background: linear-gradient(180deg, #14161c, #101218);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-dim);
+  user-select: none;
+}
+.status-bar .sb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.status-bar .sb-click {
+  cursor: pointer;
+}
+.status-bar .sb-click:hover {
+  background: var(--bg-3);
+  color: var(--text);
+}
+.status-bar .sb-msg {
+  padding: 0 10px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+.status-bar .sb-msg.success {
+  color: var(--green);
+}
+.status-bar .sb-msg.error {
+  color: var(--red);
+}
+.status-bar .sb-spacer {
+  flex: 1;
+}
+.status-bar .sb-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: 4px;
+}
+.status-bar .sb-warn {
+  color: var(--yellow);
 }
 
 /* ---------- Terminal dock + tiles ---------- */

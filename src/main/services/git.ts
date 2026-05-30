@@ -153,3 +153,16 @@ export async function branches(path: string): Promise<string[]> {
     return []
   }
 }
+
+/** The origin remote URL (fetch), or the first remote, or null. */
+export async function getRemote(path: string): Promise<string | null> {
+  try {
+    const g = git(path)
+    if (!(await g.checkIsRepo())) return null
+    const remotes = await g.getRemotes(true)
+    const origin = remotes.find((r) => r.name === 'origin') ?? remotes[0]
+    return origin?.refs?.fetch || origin?.refs?.push || null
+  } catch {
+    return null
+  }
+}

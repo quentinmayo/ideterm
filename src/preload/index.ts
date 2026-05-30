@@ -67,11 +67,13 @@ const api: IdeTermApi = {
     push: (path) => ipcRenderer.invoke('git:push', path),
     fetch: (path) => ipcRenderer.invoke('git:fetch', path),
     diff: (path, file) => ipcRenderer.invoke('git:diff', path, file),
-    branches: (path) => ipcRenderer.invoke('git:branches', path)
+    branches: (path) => ipcRenderer.invoke('git:branches', path),
+    remote: (path) => ipcRenderer.invoke('git:remote', path)
   },
   launch: {
     tool: (toolId, folderPath, modeId) => ipcRenderer.invoke('launch:tool', toolId, folderPath, modeId),
-    command: (command, cwd, title) => ipcRenderer.invoke('launch:command', command, cwd, title)
+    command: (command, cwd, title) => ipcRenderer.invoke('launch:command', command, cwd, title),
+    externalCommand: (command, cwd) => ipcRenderer.invoke('launch:externalCommand', command, cwd)
   },
   pty: {
     create: (opts) => ipcRenderer.invoke('pty:create', opts),
@@ -88,6 +90,14 @@ const api: IdeTermApi = {
   commands: {
     save: (cmd) => ipcRenderer.invoke('commands:save', cmd),
     remove: (id) => ipcRenderer.invoke('commands:remove', id)
+  },
+  favs: {
+    save: (fav) => ipcRenderer.invoke('favs:save', fav),
+    remove: (id) => ipcRenderer.invoke('favs:remove', id)
+  },
+  recents: {
+    add: (entry) => ipcRenderer.invoke('recents:add', entry),
+    clear: () => ipcRenderer.invoke('recents:clear')
   },
   fs: {
     list: (dir) => ipcRenderer.invoke('fs:list', dir),

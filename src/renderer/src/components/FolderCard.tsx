@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { GitStatus, ProjectFolder } from '@shared/types'
 import { useAppState } from '../state/AppState'
 import { useTerminals } from '../state/Terminals'
+import { useLauncher } from '../util/launch'
 import { useToast } from './Toast'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 
@@ -22,6 +23,7 @@ export function FolderCard({
 }: FolderCardProps): JSX.Element {
   const { tools, savedCommands } = useAppState()
   const terminals = useTerminals()
+  const launcher = useLauncher()
   const toast = useToast()
   const [status, setStatus] = useState<GitStatus | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
@@ -34,11 +36,8 @@ export function FolderCard({
     void refresh()
   }, [refresh])
 
-  const launch = async (toolId: string, modeId?: string): Promise<void> => {
-    const res = await window.api.launch.tool(toolId, folder.path, modeId)
-    if (!res.ok) toast(res.message, 'error')
-    else if (res.kind === 'terminal' && res.session) terminals.adoptSession(res.session)
-  }
+  const launch = (toolId: string, modeId?: string): Promise<void> =>
+    launcher.launchTool(toolId, folder.path, modeId)
 
   const runCommand = async (command: string): Promise<void> => {
     const res = await window.api.launch.command(command, folder.path)

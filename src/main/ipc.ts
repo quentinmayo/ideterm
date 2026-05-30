@@ -2,7 +2,9 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type {
   AppSettings,
   CreateTerminalOptions,
+  FavCommand,
   Project,
+  RecentLaunch,
   SavedCommand,
   SearchOptions,
   SessionSnapshot,
@@ -16,7 +18,7 @@ import * as fsSvc from './services/fs'
 import * as searchSvc from './services/search'
 import * as sessionSvc from './services/session'
 import { buildSshCommand } from './services/ssh'
-import { launchCommand, launchTool } from './services/launcher'
+import { launchCommand, launchExternalCommand, launchTool } from './services/launcher'
 import { ptyManager } from './services/pty'
 import { checkForUpdates } from './services/updates'
 
@@ -87,11 +89,15 @@ export function registerIpc(win: BrowserWindow): void {
   ipcMain.handle('git:fetch', (_e, path: string) => gitSvc.fetch(path))
   ipcMain.handle('git:diff', (_e, path: string, file: string) => gitSvc.diff(path, file))
   ipcMain.handle('git:branches', (_e, path: string) => gitSvc.branches(path))
+  ipcMain.handle('git:remote', (_e, path: string) => gitSvc.getRemote(path))
 
   // --- launching ---
   ipcMain.handle('launch:tool', (_e, toolId: string, folderPath?: string) => launchTool(toolId, folderPath))
   ipcMain.handle('launch:command', (_e, command: string, cwd?: string, title?: string) =>
     launchCommand(command, cwd, title)
+  )
+  ipcMain.handle('launch:externalCommand', (_e, command: string, cwd?: string) =>
+    launchExternalCommand(command, cwd)
   )
 
   // --- terminals (pty) ---
@@ -107,6 +113,14 @@ export function registerIpc(win: BrowserWindow): void {
   // --- saved commands ---
   ipcMain.handle('commands:save', (_e, cmd: SavedCommand) => store.saveCommand(cmd))
   ipcMain.handle('commands:remove', (_e, id: string) => store.removeCommand(id))
+
+  // --- favorite commands ---
+  ipcMain.handle('favs:save', (_e, fav: FavCommand) => store.saveFav(fav))
+  ipcMain.handle('favs:remove', (_e, id: string) => store.removeFav(id))
+
+  // --- recent launches ---
+  ipcMain.handle('recents:add', (_e, entry: RecentLaunch) => store.addRecentLaunch(entry))
+  ipcMain.handle('recents:clear', () => store.clearRecentLaunches())
 
   // --- file system ---
   ipcMain.handle('fs:list', (_e, dir: string) => fsSvc.list(dir))
