@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import type { GitFileChange, GitStatus } from '@shared/types'
 import { useSession } from '../state/Session'
 import { useAppState } from '../state/AppState'
 import { useLauncher } from '../util/launch'
@@ -13,6 +14,10 @@ interface OpenDoc {
   dirty: boolean
 }
 
+function baseName(path: string): string {
+  return path.split(/[\\/]/).pop() ?? path
+}
+
 export function FilesView(): JSX.Element {
   const { projects, filesTarget: target, openFiles, setFilesTarget, addOpenFile, removeOpenFile } = useSession()
   const { tools } = useAppState()
@@ -22,6 +27,13 @@ export function FilesView(): JSX.Element {
   const [active, setActive] = useState<string | null>(null)
   const [palette, setPalette] = useState<'tool' | 'folder' | null>(null)
   const [findOpen, setFindOpen] = useState(false)
+  const [tab, setTab] = useState<'files' | 'git'>('files')
+  const [gitStatus, setGitStatus] = useState<GitStatus | null>(null)
+  const [gitChanges, setGitChanges] = useState<GitFileChange[]>([])
+  const [gitMessage, setGitMessage] = useState('')
+  const [gitBusy, setGitBusy] = useState(false)
+  const [gitDiffFile, setGitDiffFile] = useState<string | null>(null)
+  const [gitDiffText, setGitDiffText] = useState('')
 
   const loadDoc = useCallback(
     async (path: string) => {
@@ -96,6 +108,44 @@ export function FilesView(): JSX.Element {
     if (found) setFilesTarget({ path: found.path, name: found.name })
   }
 
+  const refreshGit = useCallback(async () => {
+    if (!target) return
+    const [s, c] = await Promise.all([window.api.git.status(target.path), window.api.git.changes(target.path)])
+    setGitStatus(s)
+    setGitChanges(c)
+  }, [target])
+
+  useEffect(() => {
+    if (!target) return
+    setGitDiffFile(null)
+    setGitDiffText('')
+    if (tab === 'git') void refreshGit()
+  }, [target, tab, refreshGit])
+
+  const gitAct = useCallback(
+    async (fn: () => Promise<{ ok: boolean; message: string }>) => {
+      setGitBusy(true)
+      try {
+        const r = await fn()
+        toast(r.message, r.ok ? 'success' : 'error')
+        await refreshGit()
+      } finally {
+        setGitBusy(false)
+      }
+    },
+    [refreshGit, toast]
+  )
+
+  const showGitDiff = useCallback(
+    async (file: string) => {
+      if (!target) return
+      setGitDiffFile(file)
+      setGitDiffText('Loading…')
+      setGitDiffText(await window.api.git.diff(target.path, file))
+    },
+    [target]
+  )
+
   if (!target) {
     const folders = projects.flatMap((p) => p.folders.map((f) => ({ ...f, project: p.name })))
     return (
@@ -149,6 +199,9 @@ export function FilesView(): JSX.Element {
           <button className="btn sm" title="Find & replace in this folder" onClick={() => setFindOpen(true)}>
             🔎 Find / replace…
           </button>
+          <button className="btn sm" title="Open Git tab" onClick={() => setTab('git')}>
+            ⎇ Git
+          </button>
           <div className="spacer" />
           <button className="icon-btn" title="Reveal folder in OS explorer" onClick={() => void window.api.fs.reveal(target.path)}>
             📂
@@ -158,20 +211,26 @@ export function FilesView(): JSX.Element {
           <div className="editor-tab" onClick={() => setFilesTarget(null)} title="Back to folder list">
             ‹ Folders
           </div>
-          {openFiles.map((tab) => (
+          <div className={`editor-tab ${tab === 'git' ? 'active' : ''}`} onClick={() => setTab('git')}>
+            ⎇ Git
+          </div>
+          {openFiles.map((openTab) => (
             <div
-              key={tab.path}
-              className={`editor-tab ${active === tab.path ? 'active' : ''}`}
-              onClick={() => setActive(tab.path)}
+              key={openTab.path}
+              className={`editor-tab ${tab === 'files' && active === openTab.path ? 'active' : ''}`}
+              onClick={() => {
+                setTab('files')
+                setActive(openTab.path)
+              }}
             >
-              {docs[tab.path]?.dirty && <span className="dirty" />}
-              <span>{tab.name}</span>
+              {docs[openTab.path]?.dirty && <span className="dirty" />}
+              <span>{openTab.name}</span>
               <span
                 className="icon-btn"
                 style={{ padding: 0 }}
                 onClick={(e) => {
                   e.stopPropagation()
-                  closeTab(tab.path)
+                  closeTab(openTab.path)
                 }}
               >
                 ✕
@@ -179,7 +238,132 @@ export function FilesView(): JSX.Element {
             </div>
           ))}
         </div>
-        {active && docs[active] ? (
+        {tab === 'git' ? (
+          <div style={{ padding: 14, overflow: 'auto', height: '100%' }}>
+            {!gitStatus?.isRepo ? (
+              <div className="muted">{gitStatus?.error ?? 'This folder is not a Git repository.'}</div>
+            ) : (
+              <>
+                <div className="row" style={{ marginBottom: 12, flexWrap: 'wrap' }}>
+                  <span className="badge accent">⎇ {gitStatus.branch ?? 'detached'}</span>
+                  {!!gitStatus.ahead && <span className="badge">↑ {gitStatus.ahead}</span>}
+                  {!!gitStatus.behind && <span className="badge">↓ {gitStatus.behind}</span>}
+                  <button className="btn sm" disabled={gitBusy} onClick={() => void gitAct(() => window.api.git.fetch(target.path))}>
+                    Fetch
+                  </button>
+                  <button className="btn sm" disabled={gitBusy} onClick={() => void gitAct(() => window.api.git.pull(target.path))}>
+                    Pull
+                  </button>
+                  <button className="btn sm" disabled={gitBusy} onClick={() => void gitAct(() => window.api.git.push(target.path))}>
+                    Push
+                  </button>
+                  <div className="spacer" />
+                  <button className="btn sm" onClick={() => void refreshGit()}>
+                    ↻ Refresh
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', gap: 16 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="git-section-title">
+                      <span>Changes ({gitChanges.length})</span>
+                      {gitChanges.length > 0 && (
+                        <button
+                          className="btn sm ghost"
+                          onClick={() => void gitAct(() => window.api.git.stage(target.path, gitChanges.map((c) => c.path)))}
+                        >
+                          Stage all
+                        </button>
+                      )}
+                    </div>
+                    {gitChanges.map((c) => (
+                      <div key={c.path} className="git-file" onClick={() => void showGitDiff(c.path)}>
+                        <span
+                          className="git-status-char"
+                          style={{ color: c.untracked ? 'var(--text-faint)' : c.staged ? 'var(--green)' : 'var(--yellow)' }}
+                        >
+                          {c.staged ? c.index : c.untracked ? '?' : c.workingDir}
+                        </span>
+                        <span className="mono" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {c.path}
+                        </span>
+                        <button
+                          className="btn sm ghost"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void gitAct(() =>
+                              c.staged
+                                ? window.api.git.unstage(target.path, [c.path])
+                                : window.api.git.stage(target.path, [c.path])
+                            )
+                          }}
+                        >
+                          {c.staged ? '−' : '+'}
+                        </button>
+                        <button
+                          className="btn sm ghost"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openFile(`${target.path}/${c.path}`, baseName(c.path))
+                            setTab('files')
+                          }}
+                        >
+                          Open
+                        </button>
+                      </div>
+                    ))}
+                    {gitChanges.length === 0 && <div className="muted">Working tree clean.</div>}
+
+                    <div className="field" style={{ marginTop: 14 }}>
+                      <label>Commit message</label>
+                      <textarea
+                        rows={3}
+                        value={gitMessage}
+                        onChange={(e) => setGitMessage(e.target.value)}
+                        placeholder="Describe your changes"
+                      />
+                    </div>
+                    <button
+                      className="btn primary"
+                      disabled={gitBusy || gitChanges.every((c) => !c.staged) || !gitMessage.trim()}
+                      onClick={() =>
+                        void gitAct(async () => {
+                          const r = await window.api.git.commit(target.path, gitMessage)
+                          if (r.ok) setGitMessage('')
+                          return r
+                        })
+                      }
+                    >
+                      Commit
+                    </button>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="git-section-title">
+                      <span>Diff{gitDiffFile ? ` · ${gitDiffFile}` : ''}</span>
+                    </div>
+                    {gitDiffFile ? (
+                      <div className="diff-view">
+                        {gitDiffText.split('\n').map((line, i) => {
+                          let cls = ''
+                          if (line.startsWith('+') && !line.startsWith('+++')) cls = 'diff-add'
+                          else if (line.startsWith('-') && !line.startsWith('---')) cls = 'diff-del'
+                          else if (line.startsWith('@@') || line.startsWith('diff ')) cls = 'diff-meta'
+                          return (
+                            <div key={i} className={cls}>
+                              {line || ' '}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="muted">Click a changed file to view diff.</div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        ) : active && docs[active] ? (
           <FileEditor
             key={active}
             path={active}

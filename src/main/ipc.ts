@@ -22,7 +22,7 @@ import { launchCommand, launchExternalCommand, launchTool } from './services/lau
 import { ptyManager } from './services/pty'
 import { checkForUpdates } from './services/updates'
 
-export function registerIpc(win: BrowserWindow): void {
+export function registerIpc(win: BrowserWindow, onSessionRecentsChanged?: () => void): void {
   ptyManager.setSender(win.webContents)
 
   // --- persisted state ---
@@ -37,10 +37,16 @@ export function registerIpc(win: BrowserWindow): void {
 
   // --- session snapshots ---
   ipcMain.handle('session:state', () => sessionSvc.getSessionState())
-  ipcMain.handle('session:read', (_e, path: string) => sessionSvc.readSnapshot(path))
-  ipcMain.handle('session:write', (_e, snapshot: SessionSnapshot, path: string) =>
-    sessionSvc.writeSnapshot(path, snapshot)
-  )
+  ipcMain.handle('session:read', async (_e, path: string) => {
+    const snap = await sessionSvc.readSnapshot(path)
+    onSessionRecentsChanged?.()
+    return snap
+  })
+  ipcMain.handle('session:write', async (_e, snapshot: SessionSnapshot, path: string) => {
+    const saved = await sessionSvc.writeSnapshot(path, snapshot)
+    onSessionRecentsChanged?.()
+    return saved
+  })
   ipcMain.handle('session:tempPath', () => sessionSvc.tempPath())
   ipcMain.handle('session:recent', () => sessionSvc.listRecent())
   ipcMain.handle('session:setRoots', (_e, projects: Project[]) => sessionSvc.setActiveProjects(projects))

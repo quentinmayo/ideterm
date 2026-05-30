@@ -58,6 +58,30 @@ export function getTerminal(sessionId: string, fontSize: number): CachedTerm {
     })
   )
 
+  // Common terminal clipboard shortcuts:
+  // - Copy selection with Ctrl/Cmd+Shift+C (or Ctrl/Cmd+C when text is selected)
+  // - Paste with Ctrl/Cmd+V or Shift+Insert
+  term.attachCustomKeyEventHandler((ev) => {
+    if (ev.type !== 'keydown') return true
+    const key = ev.key.toLowerCase()
+    const hasSelection = term.hasSelection()
+    const mod = ev.ctrlKey || ev.metaKey
+    const copyCombo = mod && (key === 'c' || (ev.shiftKey && key === 'c'))
+    const pasteCombo = (mod && key === 'v') || (ev.shiftKey && ev.key === 'Insert')
+
+    if (copyCombo && hasSelection) {
+      void navigator.clipboard.writeText(term.getSelection())
+      return false
+    }
+    if (pasteCombo) {
+      void navigator.clipboard.readText().then((text) => {
+        if (text) term.paste(text)
+      })
+      return false
+    }
+    return true
+  })
+
   // Forward keystrokes to the pty.
   const dataSub = term.onData((data) => window.api.pty.write(sessionId, data))
   // Pump pty output (filtered to this session) into the terminal.

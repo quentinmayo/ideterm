@@ -48,6 +48,9 @@ export async function readSnapshot(path: string): Promise<SessionSnapshot> {
   const raw = await fs.readFile(path, 'utf-8')
   const parsed = JSON.parse(raw) as SessionSnapshot
   setActiveProjects(parsed.projects ?? [])
+  // Opening an on-disk snapshot should immediately affect startup/recents menus.
+  if (path === tempPath()) await store.setLastOpened(path)
+  else await store.addRecent(path)
   return parsed
 }
 

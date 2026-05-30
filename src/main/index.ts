@@ -53,7 +53,11 @@ let mainWindow: BrowserWindow | null = null
 /** Build the application menu. File-menu items message the renderer, which owns the live state. */
 function buildMenu(win: BrowserWindow): void {
   const send = (channel: string, ...args: unknown[]): void => win.webContents.send(channel, ...args)
-  const recent = store.getSnapshots().recent
+  const snapshots = store.getSnapshots()
+  const recent = [...snapshots.recent]
+  if (snapshots.lastOpened && !recent.includes(snapshots.lastOpened)) {
+    recent.unshift(snapshots.lastOpened)
+  }
 
   const fileSubmenu: MenuItemConstructorOptions[] = [
     { label: 'New Session', click: () => send('menu:new-temp') },
@@ -132,7 +136,9 @@ function createWindow(): void {
     if (url !== mainWindow?.webContents.getURL()) event.preventDefault()
   })
 
-  registerIpc(mainWindow)
+  registerIpc(mainWindow, () => {
+    if (mainWindow && !mainWindow.isDestroyed()) buildMenu(mainWindow)
+  })
   buildMenu(mainWindow)
 
   // Save-on-close: give the renderer a chance to flush the active session.

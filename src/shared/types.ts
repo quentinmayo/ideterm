@@ -70,6 +70,8 @@ export interface Project {
   icon?: string
   folders: ProjectFolder[]
   createdAt: number
+  /** Updated when the project is selected/opened in the Projects view. */
+  lastAccessedAt?: number
 }
 
 export interface GitCommit {

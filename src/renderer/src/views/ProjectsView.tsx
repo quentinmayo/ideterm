@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import type { Project, ProjectFolder } from '@shared/types'
 import { useAppState } from '../state/AppState'
 import { useSession } from '../state/Session'
+import { useTerminals } from '../state/Terminals'
+import { useLauncher } from '../util/launch'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
 import { ContextMenu, type MenuItem } from '../components/ContextMenu'
@@ -11,6 +13,8 @@ import { SubfolderPicker } from '../components/SubfolderPicker'
 import type { FilesTarget } from '../App'
 
 const COLORS = ['#6ea8fe', '#b58cff', '#4ec9a8', '#e2c08d', '#f06d6d', '#e8a55c']
+const PROJECTS_SORT_KEY = 'ideterm.projects.sort'
+type ProjectSort = 'recent' | 'name' | 'created'
 
 function baseName(p: string): string {
   return p.split(/[\\/]/).filter(Boolean).pop() ?? p
@@ -19,19 +23,31 @@ function baseName(p: string): string {
 export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) => void }): JSX.Element {
   const { tools } = useAppState()
   const { projects, saveProject, removeProject, selectedProjectId, setSelectedProjectId } = useSession()
+  const terminals = useTerminals()
+  const launcher = useLauncher()
   const toast = useToast()
   const [editing, setEditing] = useState<Project | null>(null)
   const [gitFolder, setGitFolder] = useState<{ path: string; name: string } | null>(null)
   const [subfolderTarget, setSubfolderTarget] = useState<ProjectFolder | null>(null)
-  const [menu, setMenu] = useState<{ x: number; y: number; project: Project } | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
+  const [globalFolderQuery, setGlobalFolderQuery] = useState('')
+  const [sort, setSort] = useState<ProjectSort>(() => {
+    try {
+      const stored = window.localStorage.getItem(PROJECTS_SORT_KEY)
+      return stored === 'name' || stored === 'created' || stored === 'recent' ? stored : 'recent'
+    } catch {
+      return 'recent'
+    }
+  })
 
   const blankProject = (): Project => ({
+    createdAt: Date.now(),
+    lastAccessedAt: Date.now(),
     id: crypto.randomUUID(),
     name: '',
     color: COLORS[0],
     icon: '📁',
-    folders: [],
-    createdAt: Date.now()
+    folders: []
   })
 
   const projectMenu = (p: Project): MenuItem[] => [
@@ -45,19 +61,61 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
       onClick: () => void removeProject(p.id)
     }
   ]
+  const sidebarMenu = (): MenuItem[] => [{ icon: '➕', label: 'New project', onClick: () => setEditing(blankProject()) }]
 
   const selectedId = selectedProjectId
   const setSelectedId = setSelectedProjectId
+  const sortedProjects = [...projects].sort((a, b) => {
+    if (sort === 'name') return (a.name || 'Untitled').localeCompare(b.name || 'Untitled')
+    if (sort === 'created') return b.createdAt - a.createdAt
+    const aRecent = a.lastAccessedAt ?? a.createdAt
+    const bRecent = b.lastAccessedAt ?? b.createdAt
+    return bRecent - aRecent
+  })
+  const q = globalFolderQuery.trim().toLowerCase()
+  const globalFolderHits = projects
+    .flatMap((project) =>
+      project.folders.map((folder) => ({
+        project,
+        folder
+      }))
+    )
+    .filter(({ project, folder }) => {
+      if (!q) return false
+      return (
+        folder.name.toLowerCase().includes(q) ||
+        folder.path.toLowerCase().includes(q) ||
+        (project.name || 'untitled').toLowerCase().includes(q)
+      )
+    })
 
   useEffect(() => {
-    if (!selectedId && projects.length) setSelectedId(projects[0].id)
+    if (!selectedId && sortedProjects.length) setSelectedId(sortedProjects[0].id)
     if (selectedId && !projects.some((p) => p.id === selectedId)) {
-      setSelectedId(projects[0]?.id ?? null)
+      setSelectedId(sortedProjects[0]?.id ?? null)
     }
-  }, [projects, selectedId, setSelectedId])
+  }, [projects, selectedId, setSelectedId, sortedProjects])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PROJECTS_SORT_KEY, sort)
+    } catch {
+      /* ignore storage errors */
+    }
+  }, [sort])
 
   const selected = projects.find((p) => p.id === selectedId) ?? null
   const ideTools = tools.filter((t) => t.type === 'ide')
+  const runnableTools = tools.filter((t) => t.type === 'terminal' || t.type === 'ai-agent' || t.type === 'custom')
+
+  const selectProject = (p: Project): void => {
+    setSelectedId(p.id)
+    const now = Date.now()
+    const current = p.lastAccessedAt ?? 0
+    // Skip noisy updates if this project was just touched.
+    if (now - current < 1_000) return
+    void saveProject({ ...p, lastAccessedAt: now })
+  }
 
   const addFolder = async (): Promise<void> => {
     if (!selected) return
@@ -92,11 +150,121 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
     setSubfolderTarget(null)
   }
 
+  const openFolderFromGlobalSearch = (project: Project, folder: ProjectFolder): void => {
+    selectProject(project)
+    onOpenFiles({ path: folder.path, name: folder.name })
+  }
+
+  const toolMenuItemsForFolder = (folderPath: string, kind: 'ide' | 'run'): MenuItem[] => {
+    const set = kind === 'ide' ? ideTools : runnableTools
+    if (!set.length) return [{ label: kind === 'ide' ? 'No IDE tools configured' : 'No runnable tools configured', disabled: true }]
+    const items: MenuItem[] = []
+    for (const tool of set) {
+      if (tool.modes?.length) {
+        items.push({ header: tool.name })
+        for (const mode of tool.modes) {
+          items.push({
+            icon: tool.icon,
+            label: mode.label,
+            onClick: () => void launcher.launchTool(tool.id, folderPath, mode.id)
+          })
+        }
+        items.push({ separator: true })
+      } else {
+        items.push({
+          icon: tool.icon,
+          label: tool.name,
+          onClick: () => void launcher.launchTool(tool.id, folderPath)
+        })
+      }
+    }
+    if (items[items.length - 1]?.separator) items.pop()
+    return items
+  }
+
+  const renderGlobalSearch = (extraStyle?: CSSProperties): JSX.Element => (
+    <div className="projects-global-search card" style={extraStyle}>
+      <div className="muted" style={{ marginBottom: 6 }}>
+        Global folder search
+      </div>
+      <input
+        className="projects-global-search-input"
+        type="text"
+        value={globalFolderQuery}
+        onChange={(e) => setGlobalFolderQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && globalFolderHits[0]) {
+            openFolderFromGlobalSearch(globalFolderHits[0].project, globalFolderHits[0].folder)
+          }
+        }}
+        placeholder="Search folders across all projects…"
+      />
+      {globalFolderQuery.trim() !== '' && (
+        <div className="projects-search-results">
+          {globalFolderHits.length === 0 ? (
+            <div className="faint">No matching folders.</div>
+          ) : (
+            globalFolderHits.slice(0, 30).map(({ project, folder }) => (
+              <div key={`${project.id}:${folder.id}`} className="projects-search-hit" title={folder.path}>
+                <button className="projects-search-hit-main" onClick={() => openFolderFromGlobalSearch(project, folder)}>
+                  <span style={{ fontSize: 14 }}>{project.icon || '📁'}</span>
+                  <span style={{ flex: 1, overflow: 'hidden' }}>
+                    <span style={{ display: 'block', fontWeight: 600 }}>{folder.name}</span>
+                    <span className="faint" style={{ display: 'block', fontSize: 11 }}>
+                      {(project.name || 'Untitled') + ' · ' + folder.path}
+                    </span>
+                  </span>
+                </button>
+                <div className="projects-search-hit-actions">
+                  <button className="btn sm" onClick={() => openFolderFromGlobalSearch(project, folder)}>
+                    Files
+                  </button>
+                  <button
+                    className="btn sm"
+                    onClick={() => void terminals.newTerminal({ cwd: folder.path, title: folder.name })}
+                  >
+                    Terminal
+                  </button>
+                  <button
+                    className="btn sm projects-action-menu-btn"
+                    disabled={!ideTools.length}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      setMenu({ x: rect.left, y: rect.bottom + 4, items: toolMenuItemsForFolder(folder.path, 'ide') })
+                    }}
+                    title="Open in IDE tool or mode"
+                  >
+                    Open in ▾
+                  </button>
+                  <button
+                    className="btn sm projects-action-menu-btn"
+                    disabled={!runnableTools.length}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const rect = e.currentTarget.getBoundingClientRect()
+                      setMenu({ x: rect.left, y: rect.bottom + 4, items: toolMenuItemsForFolder(folder.path, 'run') })
+                    }}
+                    title="Run tool or mode"
+                  >
+                    Run ▾
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <div style={{ display: 'flex', height: '100%' }}>
       <aside
         style={{
           width: 232,
+          display: 'flex',
+          flexDirection: 'column',
           flexShrink: 0,
           borderRight: '1px solid var(--border)',
           overflow: 'auto',
@@ -109,14 +277,21 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
             ＋
           </button>
         </div>
-        {projects.map((p) => (
+        <div className="field" style={{ marginBottom: 10 }}>
+          <select value={sort} onChange={(e) => setSort(e.target.value as ProjectSort)}>
+            <option value="recent">Most recently accessed</option>
+            <option value="name">Name (A → Z)</option>
+            <option value="created">Newest first</option>
+          </select>
+        </div>
+        {sortedProjects.map((p) => (
           <div
             key={p.id}
             className={`project-list-item ${p.id === selectedId ? 'active' : ''}`}
-            onClick={() => setSelectedId(p.id)}
+            onClick={() => selectProject(p)}
             onContextMenu={(e) => {
               e.preventDefault()
-              setMenu({ x: e.clientX, y: e.clientY, project: p })
+              setMenu({ x: e.clientX, y: e.clientY, items: projectMenu(p) })
             }}
             title="Right-click for project actions"
           >
@@ -134,19 +309,31 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
           </div>
         ))}
         {projects.length === 0 && <div className="faint" style={{ fontSize: 12, padding: 8 }}>No projects yet.</div>}
+        <div
+          style={{ flex: 1, minHeight: 80 }}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setMenu({ x: e.clientX, y: e.clientY, items: sidebarMenu() })
+          }}
+          title="Right-click for actions"
+        />
       </aside>
 
       <main style={{ flex: 1, overflow: 'auto' }}>
         {!selected ? (
-          <div className="empty">
-            <div className="big">📁</div>
-            <div>Create a project, then add the folders you work across.</div>
-            <button className="btn primary" onClick={() => setEditing(blankProject())}>
-              ＋ New project
-            </button>
+          <div className="view-inner">
+            {renderGlobalSearch()}
+            <div className="empty">
+              <div className="big">📁</div>
+              <div>Create a project, then add the folders you work across.</div>
+              <button className="btn primary" onClick={() => setEditing(blankProject())}>
+                ＋ New project
+              </button>
+            </div>
           </div>
         ) : (
           <div className="view-inner">
+            {renderGlobalSearch({ marginBottom: 14 })}
             <div className="page-head">
               <div className="row">
                 {selected.icon ? (
@@ -225,7 +412,7 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
           onConfirm={(paths, removeParent) => void addSubfolders(paths, removeParent)}
         />
       )}
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={projectMenu(menu.project)} onClose={() => setMenu(null)} />}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
     </div>
   )
 }

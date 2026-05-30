@@ -385,6 +385,64 @@ textarea {
   padding-top: 8px;
 }
 
+/* ---------- Projects global search ---------- */
+.projects-global-search {
+  padding: 16px;
+}
+.projects-global-search-input {
+  min-height: 42px;
+  font-size: 15px;
+  padding: 10px 12px;
+}
+.projects-search-results {
+  margin-top: 10px;
+  max-height: 320px;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.projects-search-hit {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.projects-search-hit-main {
+  flex: 1;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.projects-search-hit-main:hover {
+  background: var(--bg-2);
+}
+.projects-search-hit-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.projects-action-menu-btn {
+  min-width: 78px;
+}
+.projects-search-hit:hover {
+  width: 100%;
+  background: var(--bg-2);
+  border-color: var(--border);
+}
+
 /* ---------- Context menu ---------- */
 .ctx-menu {
   position: fixed;
