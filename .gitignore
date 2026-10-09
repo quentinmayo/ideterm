@@ -6,3 +6,6 @@ out
 .vite
 release
 *.local
+
+playwright-report
+test-results

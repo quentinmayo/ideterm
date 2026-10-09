@@ -7,6 +7,7 @@ import { useLauncher } from '../util/launch'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
 import { ContextMenu, type MenuItem } from '../components/ContextMenu'
+import { ProjectLaunchProfiles } from '../components/ProjectLaunchProfiles'
 import { FolderCard } from '../components/FolderCard'
 import { GitPanel } from '../components/GitPanel'
 import { GithubCloneWizard } from '../components/GithubCloneWizard'
@@ -338,7 +339,7 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
             {renderGlobalSearch()}
             <div className="empty">
               <div className="big">📁</div>
-              <div>Create a project, then add the folders you work across.</div>
+              <div>1. Create a project · 2. Add your repos · 3. Configure a launch profile</div>
               <button className="btn primary" onClick={() => setEditing(blankProject())}>
                 ＋ New project
               </button>
@@ -366,6 +367,8 @@ export function ProjectsView({ onOpenFiles }: { onOpenFiles: (t: FilesTarget) =>
                 </button>
               </div>
             </div>
+
+            <ProjectLaunchProfiles key={selected.id} project={selected} />
 
             {selected.folders.length === 0 ? (
               <div className="card muted">No folders yet — click “Add folder”.</div>

@@ -14,7 +14,7 @@ export function normalizePath(p: string, isWin: boolean = process.platform === '
 /** True if `child` is `parent` or sits inside it (no `..` escape). */
 export function isInside(child: string, parent: string): boolean {
   const rel = relative(parent, child)
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+  return rel === '' || (rel !== '..' && !rel.startsWith('../') && !rel.startsWith('..\\') && !isAbsolute(rel))
 }
 
 /** True if a target path lies within any of the given allowed roots. */

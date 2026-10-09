@@ -51,13 +51,15 @@ const api: IdeTermApi = {
       ipcRenderer.on('session:flush', listener)
       return () => ipcRenderer.removeListener('session:flush', listener)
     },
-    flushDone: () => ipcRenderer.send('session:flush-done')
+    flushDone: (ok) => ipcRenderer.send('session:flush-done', ok)
   },
   dialog: {
+    closeFile: (name) => ipcRenderer.invoke('dialog:closeFile', name),
     pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
     pickExecutable: () => ipcRenderer.invoke('dialog:pickExecutable')
   },
   git: {
+    onChanged: (cb) => on('git:changed', cb),
     status: (path) => ipcRenderer.invoke('git:status', path),
     changes: (path) => ipcRenderer.invoke('git:changes', path),
     stage: (path, files) => ipcRenderer.invoke('git:stage', path, files),
@@ -76,8 +78,10 @@ const api: IdeTermApi = {
     createBranchFromMain: (path, branchName) => ipcRenderer.invoke('git:create-branch-from-main', path, branchName)
   },
   launch: {
-    tool: (toolId, folderPath, modeId) => ipcRenderer.invoke('launch:tool', toolId, folderPath, modeId),
-    command: (command, cwd, title) => ipcRenderer.invoke('launch:command', command, cwd, title),
+    validateProfile: (project, profile) => ipcRenderer.invoke('launch:validateProfile', project, profile),
+    waitReady: (port, timeoutSeconds, sessionId) => ipcRenderer.invoke('launch:waitReady', port, timeoutSeconds, sessionId),
+    tool: (toolId, folderPath, modeId, env) => ipcRenderer.invoke('launch:tool', toolId, folderPath, modeId, env),
+    command: (command, cwd, title, env) => ipcRenderer.invoke('launch:command', command, cwd, title, env),
     externalCommand: (command, cwd) => ipcRenderer.invoke('launch:externalCommand', command, cwd)
   },
   pty: {

@@ -10,6 +10,7 @@ import type {
   GitStatus,
   GithubRepoSummary,
   LaunchResult,
+  LaunchProfile,
   PersistedState,
   Project,
   ReplaceResult,
@@ -55,13 +56,15 @@ export interface IdeTermApi {
     onMenu(cb: (action: MenuAction, arg?: string) => void): () => void
     /** Main asks the renderer to persist before the window closes. */
     onFlush(cb: () => void): () => void
-    flushDone(): void
+    flushDone(ok: boolean): void
   }
   dialog: {
+    closeFile(name: string): Promise<'save' | 'discard' | 'cancel'>
     pickFolder(): Promise<string | null>
     pickExecutable(): Promise<string | null>
   }
   git: {
+    onChanged(cb: (path: string) => void): () => void
     status(path: string): Promise<GitStatus>
     changes(path: string): Promise<GitFileChange[]>
     stage(path: string, files: string[]): Promise<ActionResult>
@@ -80,8 +83,10 @@ export interface IdeTermApi {
     createBranchFromMain(path: string, branchName: string): Promise<ActionResult>
   }
   launch: {
-    tool(toolId: string, folderPath?: string, modeId?: string): Promise<LaunchResult>
-    command(command: string, cwd?: string, title?: string): Promise<LaunchResult>
+    validateProfile(project: Project, profile: LaunchProfile): Promise<void>
+    waitReady(port: number, timeoutSeconds: number, sessionId: string): Promise<void>
+    tool(toolId: string, folderPath?: string, modeId?: string, env?: Record<string, string>): Promise<LaunchResult>
+    command(command: string, cwd?: string, title?: string, env?: Record<string, string>): Promise<LaunchResult>
     externalCommand(command: string, cwd?: string): Promise<ActionResult>
   }
   pty: {

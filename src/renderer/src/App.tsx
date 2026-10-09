@@ -64,7 +64,7 @@ export default function App(): JSX.Element {
           {view === 'favorites' && <FavoritesView />}
           {view === 'tools' && <ToolsView />}
           {view === 'sessions' && <SessionsView />}
-          {view === 'files' && <FilesView />}
+          {view === 'files' && <FilesView key={session.workspaceId} />}
           {view === 'settings' && <SettingsView />}
         </div>
         <TerminalDock />

@@ -54,7 +54,7 @@ export function getTerminal(sessionId: string, fontSize: number): CachedTerm {
   term.loadAddon(fit)
   term.loadAddon(
     new WebLinksAddon((_e, uri) => {
-      void window.api.fs.openExternal(uri)
+      void window.api.app.openExternal(uri)
     })
   )
 

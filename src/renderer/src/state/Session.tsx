@@ -6,7 +6,9 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode
+  type ReactNode,
+  type Dispatch,
+  type SetStateAction
 } from 'react'
 import type { Project, SessionSnapshot, SessionState, SnapshotView } from '@shared/types'
 import { useToast } from '../components/Toast'
@@ -17,7 +19,13 @@ interface FilesTarget {
   name: string
 }
 
+export interface OpenDoc { text: string; dirty: boolean }
+
 interface SessionValue {
+  workspaceId: string
+  docs: Record<string, OpenDoc>
+  setDocs: Dispatch<SetStateAction<Record<string, OpenDoc>>>
+  loadDoc: (path: string) => Promise<void>
   active: boolean
   name: string
   path: string | null
@@ -87,6 +95,7 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
   const terminals = useTerminals()
 
   const [active, setActive] = useState(false)
+  const [workspaceId, setWorkspaceId] = useState('')
   const [name, setName] = useState('')
   const [path, setPath] = useState<string | null>(null)
   const [isTemporary, setIsTemporary] = useState(false)
@@ -99,6 +108,22 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
   const [selectedProjectId, setSelectedProjectIdState] = useState<string | null>(null)
   const [filesTarget, setFilesTargetState] = useState<FilesTarget | null>(null)
   const [openFiles, setOpenFiles] = useState<FilesTarget[]>([])
+  const [docs, updateDocs] = useState<Record<string, OpenDoc>>({})
+  const docsRef = useRef(docs)
+  const epoch = useRef(0)
+  const setDocs = useCallback<Dispatch<SetStateAction<Record<string, OpenDoc>>>>((update) => {
+    docsRef.current = typeof update === 'function' ? update(docsRef.current) : update
+    updateDocs(docsRef.current)
+  }, [])
+  const loadDoc = useCallback(async (filePath: string) => {
+    const generation = epoch.current
+    try {
+      const text = await window.api.fs.read(filePath)
+      if (generation === epoch.current && !docsRef.current[filePath]) {
+        setDocs((d) => ({ ...d, [filePath]: { text, dirty: false } }))
+      }
+    } catch (error) { toast(String(error), 'error') }
+  }, [setDocs, toast])
 
   const markDirty = useCallback(() => setDirty(true), [])
 
@@ -124,6 +149,7 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
         selectedProjectId,
         filesTarget,
         openFiles,
+        editorDrafts: Object.fromEntries(Object.entries(docsRef.current).filter(([, doc]) => doc.dirty).map(([file, doc]) => [file, doc.text])),
         terminals: term.groups,
         floating: term.floating,
         dockVisible: term.dockVisible,
@@ -134,6 +160,9 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
 
   const applySnapshot = useCallback(
     async (snap: SessionSnapshot, snapPath: string, temp: boolean) => {
+      epoch.current++
+      setWorkspaceId(crypto.randomUUID())
+      setDocs(Object.fromEntries(Object.entries(snap.ui.editorDrafts ?? {}).map(([file, text]) => [file, { text, dirty: true }])))
       createdAtRef.current = snap.createdAt
       setName(snap.name)
       setProjects(snap.projects ?? [])
@@ -145,7 +174,7 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
       setIsTemporary(temp)
       setActive(true)
       setDirty(false)
-      void window.api.session.setRoots(snap.projects ?? [])
+      await window.api.session.setRoots(snap.projects ?? [])
       terminals.reset()
       await terminals.restore({
         groups: snap.ui.terminals ?? [],
@@ -154,11 +183,16 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
         dockHeight: snap.ui.dockHeight
       })
     },
-    [terminals]
+    [terminals, setDocs]
   )
 
   const newTemporary = useCallback(
     async (seedProjects?: Project[]) => {
+      if (active && path) {
+        const destination = isTemporary ? await window.api.session.saveDialog('workspace.ideterm-session.json') : path
+        if (!destination) return
+        await window.api.session.write(collect(), destination)
+      }
       const tempPath = await window.api.session.tempPath()
       const snap = blankSnapshot('Temporary session')
       if (seedProjects) snap.projects = seedProjects
@@ -166,26 +200,28 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
       await window.api.session.write(snap, tempPath)
       void refreshState()
     },
-    [applySnapshot, refreshState]
+    [active, path, isTemporary, collect, applySnapshot, refreshState]
   )
 
   const newOnDisk = useCallback(async () => {
     const chosen = await window.api.session.saveDialog('workspace.ideterm-session.json')
     if (!chosen) return
+    if (active && path) await window.api.session.write(collect(), path)
     const snap = blankSnapshot(baseName(chosen))
     await applySnapshot(snap, chosen, false)
     await window.api.session.write(snap, chosen)
     void refreshState()
-  }, [applySnapshot, refreshState])
+  }, [active, path, collect, applySnapshot, refreshState])
 
   const openPath = useCallback(
     async (target: string) => {
+      if (active && path) await window.api.session.write(collect(), path)
       const snap = await window.api.session.read(target)
       const temp = sessionState?.tempPath === target
       await applySnapshot(snap, target, temp)
       void refreshState()
     },
-    [applySnapshot, refreshState, sessionState]
+    [active, path, collect, applySnapshot, refreshState, sessionState]
   )
 
   const openDialog = useCallback(async () => {
@@ -204,11 +240,11 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
   const saveAs = useCallback(async () => {
     const chosen = await window.api.session.saveDialog(`${name || 'workspace'}.ideterm-session.json`)
     if (!chosen) return
+    const newName = baseName(chosen)
+    await window.api.session.write({ ...collect(), name: newName }, chosen)
     setPath(chosen)
     setIsTemporary(false)
-    const newName = baseName(chosen)
     setName(newName)
-    await window.api.session.write({ ...collect(), name: newName }, chosen)
     setDirty(false)
     toast(`Saved session as "${newName}"`, 'success')
     void refreshState()
@@ -276,8 +312,11 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
   const latest = useRef({ active, path, collect, newTemporary, newOnDisk, openDialog, openPath, save, saveAs })
   latest.current = { active, path, collect, newTemporary, newOnDisk, openDialog, openPath, save, saveAs }
 
+  const started = useRef(false)
   // Startup: load snapshot state; auto-open most recent if configured.
   useEffect(() => {
+    if (started.current) return
+    started.current = true
     void (async () => {
       const st = await window.api.session.state()
       setSessionState(st)
@@ -292,21 +331,31 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Persist recovery drafts shortly after edits; do not overwrite source files.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const a = latest.current
+      if (a.active && a.path) void window.api.session.write(a.collect(), a.path).catch((error) => toast(`Recovery save failed: ${String(error)}`, 'error'))
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [docs, projects, toast])
+
   // Autosave every minute + respond to native menu and close-flush.
   useEffect(() => {
     const timer = setInterval(() => {
       const a = latest.current
-      if (a.active && a.path) void window.api.session.write(a.collect(), a.path)
+      if (a.active && a.path) void window.api.session.write(a.collect(), a.path).catch((error) => toast(`Autosave failed: ${String(error)}`, 'error'))
     }, 60_000)
 
     const offMenu = window.api.session.onMenu((action, arg) => {
       const a = latest.current
-      if (action === 'new-temp') void a.newTemporary()
-      else if (action === 'new-disk') void a.newOnDisk()
-      else if (action === 'open') void a.openDialog()
-      else if (action === 'save') void a.save()
-      else if (action === 'save-as') void a.saveAs()
-      else if (action === 'open-path' && arg) void a.openPath(arg)
+      const report = (promise: Promise<void>): void => { void promise.catch((error) => toast(String(error), 'error')) }
+      if (action === 'new-temp') report(a.newTemporary())
+      else if (action === 'new-disk') report(a.newOnDisk())
+      else if (action === 'open') report(a.openDialog())
+      else if (action === 'save') report(a.save())
+      else if (action === 'save-as') report(a.saveAs())
+      else if (action === 'open-path' && arg) report(a.openPath(arg))
     })
 
     const offFlush = window.api.session.onFlush(() => {
@@ -314,8 +363,10 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
       void (async () => {
         try {
           if (a.active && a.path) await window.api.session.write(a.collect(), a.path)
-        } finally {
-          window.api.session.flushDone()
+          window.api.session.flushDone(true)
+        } catch (error) {
+          toast(`Could not save session: ${String(error)}`, 'error')
+          window.api.session.flushDone(false)
         }
       })()
     })
@@ -329,6 +380,7 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
 
   const value = useMemo<SessionValue>(
     () => ({
+      workspaceId, docs, setDocs, loadDoc,
       active,
       name,
       path,
@@ -357,6 +409,7 @@ export function SessionProvider({ children }: { children: ReactNode }): JSX.Elem
       refreshState
     }),
     [
+      workspaceId, docs, setDocs, loadDoc,
       active,
       name,
       path,

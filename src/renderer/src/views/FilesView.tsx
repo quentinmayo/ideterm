@@ -9,21 +9,15 @@ import { FindReplacePanel } from '../components/FindReplacePanel'
 import { FileTree } from '../files/FileTree'
 import { FileEditor } from '../files/FileEditor'
 
-interface OpenDoc {
-  text: string
-  dirty: boolean
-}
-
 function baseName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path
 }
 
 export function FilesView(): JSX.Element {
-  const { projects, filesTarget: target, openFiles, setFilesTarget, addOpenFile, removeOpenFile } = useSession()
+  const { docs, setDocs, loadDoc, projects, filesTarget: target, openFiles, setFilesTarget, addOpenFile, removeOpenFile } = useSession()
   const { tools } = useAppState()
   const launcher = useLauncher()
   const toast = useToast()
-  const [docs, setDocs] = useState<Record<string, OpenDoc>>({})
   const [active, setActive] = useState<string | null>(null)
   const [palette, setPalette] = useState<'tool' | 'folder' | null>(null)
   const [findOpen, setFindOpen] = useState(false)
@@ -34,18 +28,6 @@ export function FilesView(): JSX.Element {
   const [gitBusy, setGitBusy] = useState(false)
   const [gitDiffFile, setGitDiffFile] = useState<string | null>(null)
   const [gitDiffText, setGitDiffText] = useState('')
-
-  const loadDoc = useCallback(
-    async (path: string) => {
-      try {
-        const text = await window.api.fs.read(path)
-        setDocs((d) => ({ ...d, [path]: { text, dirty: false } }))
-      } catch (err) {
-        toast(err instanceof Error ? err.message : String(err), 'error')
-      }
-    },
-    [toast]
-  )
 
   const openFile = useCallback(
     (path: string, name: string) => {
@@ -70,7 +52,7 @@ export function FilesView(): JSX.Element {
       if (!doc) return
       try {
         await window.api.fs.write(path, doc.text)
-        setDocs((d) => ({ ...d, [path]: { ...d[path], dirty: false } }))
+        setDocs((d) => d[path]?.text === doc.text ? { ...d, [path]: { ...d[path], dirty: false } } : d)
         toast('Saved', 'success')
       } catch (err) {
         toast(err instanceof Error ? err.message : String(err), 'error')
@@ -79,7 +61,16 @@ export function FilesView(): JSX.Element {
     [docs, toast]
   )
 
-  const closeTab = (path: string): void => {
+  const closeTab = async (path: string): Promise<void> => {
+    if (docs[path]?.dirty) {
+      const choice = await window.api.dialog.closeFile(baseName(path))
+      if (choice === 'cancel') return
+      if (choice === 'save') {
+        try { await window.api.fs.write(path, docs[path].text) }
+        catch (error) { toast(String(error), 'error'); return }
+      }
+    }
+    setDocs((d) => { const next = { ...d }; delete next[path]; return next })
     removeOpenFile(path)
     setActive((cur) => {
       if (cur !== path) return cur
@@ -230,7 +221,7 @@ export function FilesView(): JSX.Element {
                 style={{ padding: 0 }}
                 onClick={(e) => {
                   e.stopPropagation()
-                  closeTab(openTab.path)
+                  void closeTab(openTab.path)
                 }}
               >
                 ✕

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import '@xterm/xterm/css/xterm.css'
 import './styles/global.css'
 import App from './App'
+import { LaunchProfilesProvider } from './state/LaunchProfiles'
 import { AppStateProvider } from './state/AppState'
 import { TerminalsProvider } from './state/Terminals'
 import { SessionProvider } from './state/Session'
@@ -14,7 +15,7 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <AppStateProvider>
         <TerminalsProvider>
           <SessionProvider>
-            <App />
+            <LaunchProfilesProvider><App /></LaunchProfilesProvider>
           </SessionProvider>
         </TerminalsProvider>
       </AppStateProvider>

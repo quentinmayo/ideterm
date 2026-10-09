@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { FileEntry } from '@shared/types'
-import { isPathInsideRoots } from './pathSafety'
+import { allowedPath, assertNotRoot } from './fileAccess'
 import { getActiveRoots } from './session'
 
 const MAX_READ_BYTES = 5 * 1024 * 1024 // 5 MB editor guard
@@ -12,16 +12,12 @@ function roots(): string[] {
 }
 
 /** Reject any path outside the user's configured project folders. */
-function assertAllowed(target: string): string {
-  const resolved = resolve(target)
-  if (!isPathInsideRoots(resolved, roots())) {
-    throw new Error('Path is outside any project folder')
-  }
-  return resolved
+function assertAllowed(target: string): Promise<string> {
+  return allowedPath(target, roots())
 }
 
 export async function list(dir: string): Promise<FileEntry[]> {
-  const safe = assertAllowed(dir)
+  const safe = await assertAllowed(dir)
   const dirents = await fs.readdir(safe, { withFileTypes: true })
   const entries = await Promise.all(
     dirents.map(async (d): Promise<FileEntry> => {
@@ -44,7 +40,7 @@ export async function list(dir: string): Promise<FileEntry[]> {
 }
 
 export async function read(file: string): Promise<string> {
-  const safe = assertAllowed(file)
+  const safe = await assertAllowed(file)
   const stat = await fs.stat(safe)
   if (stat.size > MAX_READ_BYTES) {
     throw new Error(`File is too large to edit (${Math.round(stat.size / 1024)} KB)`)
@@ -53,12 +49,12 @@ export async function read(file: string): Promise<string> {
 }
 
 export async function write(file: string, content: string): Promise<void> {
-  const safe = assertAllowed(file)
+  const safe = await assertAllowed(file)
   await fs.writeFile(safe, content, 'utf-8')
 }
 
 export async function create(target: string, kind: 'file' | 'directory'): Promise<string> {
-  const safe = assertAllowed(target)
+  const safe = await assertAllowed(target)
   if (kind === 'directory') {
     await fs.mkdir(safe, { recursive: true })
   } else {
@@ -71,23 +67,34 @@ export async function create(target: string, kind: 'file' | 'directory'): Promis
 }
 
 export async function remove(target: string): Promise<void> {
-  const safe = assertAllowed(target)
+  const safe = await assertAllowed(target)
+  await assertNotRoot(safe, roots())
   await fs.rm(safe, { recursive: true, force: false })
 }
 
 export async function rename(target: string, newName: string): Promise<string> {
-  if (/[\\/]/.test(newName)) throw new Error('Name cannot contain path separators')
-  const safe = assertAllowed(target)
-  const dest = assertAllowed(join(resolve(safe, '..'), newName))
+  if (!newName || newName === '.' || newName === '..' || /[\\/]/.test(newName)) throw new Error('Name cannot contain path separators')
+  const safe = await assertAllowed(target)
+  const dest = await assertAllowed(join(resolve(safe, '..'), newName))
+  await assertNotRoot(safe, roots())
+  await assertMissing(dest)
   await fs.rename(safe, dest)
   return dest
 }
 
 export async function move(src: string, destDir: string): Promise<string> {
-  const safeSrc = assertAllowed(src)
-  const safeDestDir = assertAllowed(destDir)
+  const safeSrc = await assertAllowed(src)
+  const safeDestDir = await assertAllowed(destDir)
   const name = safeSrc.split(/[\\/]/).pop() as string
-  const dest = join(safeDestDir, name)
+  const dest = await assertAllowed(join(safeDestDir, name))
+  await assertNotRoot(safeSrc, roots())
+  await assertMissing(dest)
   await fs.rename(safeSrc, dest)
   return dest
+}
+
+async function assertMissing(path: string): Promise<void> {
+  try { await fs.lstat(path) }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error }
+  throw new Error('Destination already exists')
 }

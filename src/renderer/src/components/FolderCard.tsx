@@ -33,8 +33,12 @@ export function FolderCard({
   }, [folder.path])
 
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    const update = (): void => { void refresh().catch(() => {}) }
+    update()
+    window.addEventListener('focus', update)
+    const off = window.api.git.onChanged((path) => { if (path === '*' || path === folder.path) update() })
+    return () => { window.removeEventListener('focus', update); off() }
+  }, [refresh, folder.path])
 
   const launch = (toolId: string, modeId?: string): Promise<void> =>
     launcher.launchTool(toolId, folder.path, modeId)
@@ -120,6 +124,8 @@ export function FolderCard({
   return (
     <div
       className="folder-card"
+      role="group"
+      aria-label={folder.name}
       style={{ cursor: 'pointer' }}
       title="Open in file tree · right-click for actions"
       onClick={onOpenFiles}
@@ -153,6 +159,11 @@ export function FolderCard({
         >
           ⋯
         </button>
+      </div>
+      <div className="row" style={{ margin: '10px 0' }} onClick={(e) => e.stopPropagation()}>
+        <button className="btn sm" onClick={onOpenFiles}>Files</button>
+        <button className="btn sm" onClick={() => void terminals.newTerminal({ cwd: folder.path, title: folder.name })}>Terminal</button>
+        <button className="btn sm" onClick={(e) => { const rect = e.currentTarget.getBoundingClientRect(); setMenu({ x: rect.left, y: rect.bottom }) }}>Run tool…</button>
       </div>
       <div className="path">{folder.path}</div>
       <div className="git-row">{gitBadges()}</div>

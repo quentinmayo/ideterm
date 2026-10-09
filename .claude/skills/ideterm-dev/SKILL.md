@@ -29,7 +29,7 @@ npm run make-icons # regenerate build/icon.png + icon.ico from build/icon.svg
 ## Process model & layout
 
 Three processes; the renderer only talks to main through the typed `window.api` bridge
-(`contextIsolation: true`, `nodeIntegration: false`, `sandbox: false`).
+(`contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`).
 
 ```
 src/shared/   types.ts (all shared types) + api.ts (the window.api contract)
@@ -77,13 +77,13 @@ For main→renderer events, `webContents.send('chan', payload)` in main and expo
 - All file operations go through `services/fs.ts`, which **rejects paths outside the active
   snapshot's project roots** (`isPathInsideRoots`). Don't bypass it.
 - Launch model (`launchCommand.ts` `launchMode`): `external` (detached window), `shell` (the exe IS
-  the embedded terminal), `command` (run default shell, type the command). Spawn external apps with
-  `shell:true` so Windows `.cmd` shims work.
+  the embedded terminal), `command` (run default shell, type the command). Spawn external executables with argument arrays; use the restricted cmd adapter only for
+  Windows `.cmd`/`.bat` shims. Quote embedded tool arguments for the selected shell dialect.
 - xterm instances live in `terminal/termCache.ts` keyed by session id, NOT in React state — so
   scrollback survives tab switches / re-mounts. Dispose via `disposeTerminal` on close.
 - Use `window.prompt` is unreliable in Electron — use the `Prompt`/`Modal` components instead.
 - Main process is ESM (`"type":"module"`); derive dirs from `import.meta.url`; preload builds to
-  `out/preload/index.mjs`.
+  `out/preload/index.cjs`.
 
 ## Gotchas / hard-won lessons
 
@@ -94,11 +94,23 @@ For main→renderer events, `webContents.send('chan', payload)` in main and expo
   vite 7) that desyncs `package-lock.json` and breaks `npm ci` on CI.
 - **Local `electron-builder --win` fails** with a winCodeSign symlink-privilege error (no Developer
   Mode/admin). Build installers via the GitHub Actions release workflow instead (see `ideterm-release`).
-- A production **Content-Security-Policy is not set yet** (Electron shows a dev-only warning,
-  suppressed when packaged) — tracked follow-up.
+- Production windows set a Content-Security-Policy. IPC handlers validate sender frames and arguments;
+  filesystem boundaries also resolve symlinks. Keep new IPC argument schemas in `ipcValidation.ts`.
 
 ## Verifying a change
 
-Run `npm run check && npm run build`. For runtime behavior, `npm run dev` (or boot the built app
+Run `npm run check && npm run build && npm run test:e2e`. For runtime behavior, `npm run dev` (or boot the built app
 with `ELECTRON_ENABLE_LOGGING=1 npx electron .` and read the renderer console for errors). The
 native PTY can be smoke-tested headlessly by `require('@lydell/node-pty').spawn(...)` under Electron.
+
+## Session recovery and profiles
+
+- `SessionProvider` owns file buffers. Dirty contents are persisted as optional `ui.editorDrafts`;
+  switching views must never own or discard these buffers. Source-file saves remain explicit.
+- `Project.launchProfiles` stores ordered tool/command steps with folder IDs, environment overrides,
+  and optional local TCP readiness checks. `LaunchProfilesProvider` survives view changes and cancels
+  pending launches when the workspace changes. Restoring a snapshot never reruns commands.
+- Global config and snapshots use the per-path `atomicWrite` queue. Snapshot writes do not change
+  active file roots; only activating/editing the workspace does that.
+- Window IPC registration returns a disposer. Clean up handlers/listeners and PTYs when the window
+  closes so macOS can create another window without duplicate handlers.
