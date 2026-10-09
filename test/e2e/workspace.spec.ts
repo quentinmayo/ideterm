@@ -108,6 +108,7 @@ test('unsaved text survives navigation, session switching, and app restart', asy
   const other = join(directory, 'other.ideterm-session.json')
   const snapshot = JSON.parse(await fs.readFile(snapshotPath, 'utf8'))
   snapshot.name = 'Other workspace'
+  snapshot.ui.activeView = 'files'
   snapshot.ui.editorDrafts = { [join(project.folders[0].path, 'draft.txt')]: 'another session draft' }
   await fs.writeFile(other, JSON.stringify(snapshot))
   await app.evaluate(

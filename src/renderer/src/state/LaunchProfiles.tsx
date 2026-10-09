@@ -114,7 +114,10 @@ export function LaunchProfilesProvider({ children }: { children: ReactNode }): J
     } catch (error) {
       const failed = run.steps.find((s) => s.status === 'starting') ?? run.steps[0]
       failed.status = run.controller.signal.aborted ? 'stopped' : 'failed'
-      failed.message = String(error instanceof Error ? error.message : error)
+      failed.message = String(error instanceof Error ? error.message : error).replace(
+        /^Error invoking remote method '[^']+': (?:Error: )?/,
+        ''
+      )
       if (!run.controller.signal.aborted) toast(failed.message, 'error')
     } finally {
       for (const step of run.steps) if (step.status === 'pending') step.status = 'skipped'

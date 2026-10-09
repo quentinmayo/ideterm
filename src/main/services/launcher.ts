@@ -8,9 +8,9 @@ import { ptyManager } from './pty'
 import { buildCommandLine, effectiveTool, resolveLaunchMode, placeFolder, quoteArg, shellDialect } from './launchCommand'
 
 /** Launch a detached external process (its own window) — IDEs, GUI terminals. */
-async function spawnDetached(file: string, args: string[], cwd?: string, env?: Record<string, string>): Promise<void> {
+async function spawnDetached(file: string, args: string[], cwd?: string, env?: Record<string, string>, windowsVerbatimArguments = false): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(file, args, { cwd, env: { ...process.env, ...env }, detached: true, stdio: 'ignore', windowsHide: false })
+    const child = spawn(file, args, { cwd, env: { ...process.env, ...env }, detached: true, windowsVerbatimArguments, stdio: 'ignore', windowsHide: false })
     child.once('error', reject)
     child.once('spawn', () => { child.unref(); resolve() })
   })
@@ -19,7 +19,7 @@ async function spawnDetached(file: string, args: string[], cwd?: string, env?: R
 async function launchExternal(tool: Tool, folderPath?: string, env?: Record<string, string>): Promise<LaunchResult> {
   try {
     if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(tool.path)) {
-      await spawnDetached('cmd.exe', ['/d', '/s', '/c', `"${buildCommandLine(tool, folderPath, 'cmd')}"`], folderPath, env)
+      await spawnDetached('cmd.exe', ['/d', '/s', '/c', `"${buildCommandLine(tool, folderPath, 'cmd')}"`], folderPath, env, true)
     } else {
       await spawnDetached(tool.path, placeFolder(tool, folderPath), folderPath, env)
     }

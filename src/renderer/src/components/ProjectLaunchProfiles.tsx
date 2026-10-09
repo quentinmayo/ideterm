@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ZodError } from 'zod'
 import type { LaunchProfile, LaunchStep, Project } from '@shared/types'
 import { profileSchema } from '@shared/validation'
 import { useAppState } from '../state/AppState'
@@ -199,7 +200,22 @@ function ProfileEditor({
         throw new Error('Choose an existing folder for every step')
       onSave(parsed)
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error))
+      setError(
+        error instanceof ZodError
+          ? error.issues
+              .slice(0, 3)
+              .map((issue) => {
+                const step =
+                  issue.path[0] === 'steps' && typeof issue.path[1] === 'number'
+                    ? `Step ${issue.path[1] + 1}: `
+                    : ''
+                return step + issue.message
+              })
+              .join(' · ')
+          : error instanceof Error
+            ? error.message
+            : String(error)
+      )
     }
   }
   return (

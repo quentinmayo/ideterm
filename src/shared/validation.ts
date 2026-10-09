@@ -39,7 +39,7 @@ export const toolSchema = z.object({
 export const profileSchema = z
   .object({
     id,
-    name: text.min(1),
+    name: text.min(1, 'Enter a profile name'),
     steps: z
       .array(
         z
@@ -61,7 +61,7 @@ export const profileSchema = z
             }
           })
       )
-      .min(1)
+      .min(1, 'Add at least one launch step')
       .max(30)
   })
   .refine((p) => new Set(p.steps.map((s) => s.id)).size === p.steps.length, 'Duplicate step IDs')
