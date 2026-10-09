@@ -379,3 +379,39 @@ test('profile cancellation stops waiting terminals and skips remaining steps', a
   await expect(page.locator('.launch-step-result .badge')).toHaveText(['stopped', 'skipped'])
   expect(await page.evaluate(async () => (await (window as any).api.pty.list()).length)).toBe(0)
 })
+
+test('Windows batch shims preserve spaced paths and literal shell metacharacters', async () => {
+  test.skip(process.platform !== 'win32')
+  const shim = join(directory, 'tool shim.cmd')
+  const output = join(directory, 'batch output.txt')
+  await fs.writeFile(
+    shim,
+    `@echo off\r\n"${process.execPath}" -e "require('fs').writeFileSync(process.argv[1],process.argv[2])" "%~1" "%~2"\r\n`
+  )
+  const result = await page.evaluate(
+    async ({ shim, output, cwd }) => {
+      const api = (window as any).api
+      await api.tools.save({
+        id: 'shim',
+        name: 'Batch shim',
+        path: shim,
+        type: 'ide',
+        launchMode: 'external',
+        folderArgPosition: 'none',
+        args: [output, 'literal & argument']
+      })
+      return api.launch.tool('shim', cwd)
+    },
+    { shim, output, cwd: project.folders[0].path }
+  )
+  expect(result.ok).toBe(true)
+  await expect
+    .poll(async () => {
+      try {
+        return await fs.readFile(output, 'utf8')
+      } catch {
+        return ''
+      }
+    })
+    .toBe('literal & argument')
+})
