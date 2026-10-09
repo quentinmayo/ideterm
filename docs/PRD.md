@@ -31,7 +31,7 @@ simultaneously (e.g. a frontend, backend, scanner service, and infra repo in one
 
 ## Non-goals
 
-Not a full IDE (no LSP, extensions, debugger, or project-wide search). Not a replacement for AI
+Not a full IDE (no LSP, extensions, or debugger). Not a replacement for AI
 tooling. No remote/SSH project sync (the SSH builder opens a local terminal only). No plugin
 system, no auto-update server. Single window.
 
@@ -60,8 +60,9 @@ folder-arg position, icon) and merge by id with user-saved/overridden tools.
 ## Project / workspace model
 
 `Project { id, name, color, folders: ProjectFolder[], createdAt }`,
-`ProjectFolder { id, path, name }`. Persisted as a single version-stamped JSON file in the OS
-user-data directory, written atomically.
+`ProjectFolder { id, path, name }`. Projects and launch profiles live in per-workspace snapshots,
+written through a serialized atomic-write queue. Global settings and tool definitions stay in the
+OS user-data directory.
 
 ## Terminal session model
 
@@ -98,20 +99,21 @@ pure UI. Native terminal support uses N-API prebuilt binaries — no `node-gyp`,
 
 ## Data model
 
-`PersistedState { version, projects, tools, savedCommands, settings }`. Runtime-only:
-`TerminalSession`, tile trees, floating panels. See `src/shared/types.ts`.
+`PersistedState` contains tools, commands, settings, and the snapshot registry. `SessionSnapshot`
+contains projects, launch profiles, UI state, terminal layout descriptors, and unsaved editor drafts.
+PTY processes and profile-run status are runtime-only. See `src/shared/types.ts`.
 
 ## Security considerations
 
 contextIsolation on / nodeIntegration off; path validation for all folder/exe operations;
 `spawn` with arg arrays (dangerous flags are user-configured, never auto-applied); file operations
 sandboxed to project roots; external navigation denied; PTYs killed on quit. SSH sessions are
-local-terminal-only. A production CSP is a tracked follow-up.
+local-terminal-only. Production windows enforce CSP and renderer sandboxing. IPC validates sender frames and argument
+schemas. File guards resolve symlinks before access.
 
 ## Future features
 
-Project-wide search; per-tool environment overrides; session persistence/restore across restarts;
-remote/SSH-aware projects; theming; auto-update; a plugin API; Git stash/branch-switch UI.
+Signed/notarized installers; remote/SSH-aware projects; theming; auto-update; a plugin API; Git stash/branch-switch UI.
 
 ## Acceptance criteria
 
@@ -125,3 +127,20 @@ remote/SSH-aware projects; theming; auto-update; a plugin API; Git stash/branch-
 - SSH builder composes a valid command, shows the local-only warning, and runs/saves it.
 - Installs and runs on Windows, macOS, and Linux without a compiler present.
 - State persists across restarts.
+
+## Project launch profiles and recovery
+
+A project can define named profiles (Develop, Debug, Review), each with ordered steps targeting its
+folders. A step launches a configured tool/mode or a terminal command, with optional environment
+overrides and a loopback TCP readiness check. Validate all references before launching. Stop after
+a failed launch/readiness check, preserve earlier terminals for inspection, and support cancellation.
+Group embedded sessions in a usable split layout. Restart retains the original arguments, command,
+and environment. External apps remain independently managed by the OS.
+
+Unsaved editor buffers belong to the session, survive navigation, and persist as recovery drafts.
+Switching sessions saves the old snapshot first. Dirty-tab closure offers Save, Discard, or Cancel.
+A failed close-time save must not mark the run as a clean shutdown or silently discard the workspace.
+
+PR checks run on all three operating systems. Electron tests must use isolated user-data folders and
+cover navigation/restart recovery, real IPC tool-mode selection, profile launching, terminal layout,
+readiness/cancellation, and macOS window reopening.

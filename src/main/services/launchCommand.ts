@@ -5,10 +5,24 @@ import type { Tool } from '@shared/types'
  * Kept free of Node/Electron imports so they are trivially unit-testable.
  */
 
-/** Quote an argument for a shell command line if it contains spaces or quotes. */
-export function quoteArg(arg: string): string {
-  if (arg === '') return '""'
-  return /[\s"]/.test(arg) ? `"${arg.replace(/"/g, '\\"')}"` : arg
+export type ShellDialect = 'posix' | 'powershell' | 'cmd'
+export function shellDialect(shell: string): ShellDialect {
+  const name = shell.split(/[\\/]/).pop()?.toLowerCase() ?? ''
+  if (/^(pwsh|powershell)(\.exe)?$/.test(name)) return 'powershell'
+  if (/^cmd(\.exe)?$/.test(name)) return 'cmd'
+  return 'posix'
+}
+
+/** Quote literal arguments for the shell actually receiving them. */
+export function quoteArg(arg: string, dialect: ShellDialect = 'posix'): string {
+  if (dialect === 'cmd') {
+    // cmd expands these even inside quotes. Refuse rather than reinterpret literals.
+    if (/["%!^\r\n]/.test(arg)) throw new Error('This argument cannot be safely passed through cmd.exe')
+    return `"${arg}"`
+  }
+  if (dialect === 'powershell') return "'" + arg.replace(/'/g, "''") + "'"
+  if (/^[a-zA-Z0-9_./:=+,-]+$/.test(arg)) return arg
+  return "'" + arg.replace(/'/g, "'\\''") + "'"
 }
 
 /** Place the folder path relative to the tool's default args. */
@@ -39,8 +53,8 @@ export function resolveLaunchMode(tool: Tool): 'external' | 'shell' | 'command' 
 }
 
 /** The full, shell-quoted command line for launching a tool against a folder. */
-export function buildCommandLine(tool: Tool, folderPath?: string): string {
-  return [tool.path, ...placeFolder(tool, folderPath)].map(quoteArg).join(' ')
+export function buildCommandLine(tool: Tool, folderPath?: string, dialect: ShellDialect = 'posix'): string {
+  return (dialect === 'powershell' ? '& ' : '') + [tool.path, ...placeFolder(tool, folderPath)].map((arg) => quoteArg(arg, dialect)).join(' ')
 }
 
 /**

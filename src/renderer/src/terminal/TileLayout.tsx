@@ -3,14 +3,18 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { useTerminals, type TileNode } from '../state/Terminals'
 import { TerminalView } from './TerminalView'
 
+function leafCount(node: TileNode): number {
+  return node.kind === 'leaf' ? 1 : node.children.reduce((count, child) => count + leafCount(child), 0)
+}
+
 export function TileLayout({ node }: { node: TileNode }): JSX.Element {
   if (node.kind === 'leaf') return <TermPane sessionId={node.sessionId} />
   return (
-    <PanelGroup id={node.id} direction={node.dir === 'row' ? 'horizontal' : 'vertical'}>
+    <PanelGroup key={node.children.map((child) => child.id).join(':')} id={node.id} direction={node.dir === 'row' ? 'horizontal' : 'vertical'}>
       {node.children.map((child, i) => (
         <Fragment key={child.id}>
           {i > 0 && <PanelResizeHandle className="resize-handle" />}
-          <Panel id={child.id} order={i} minSize={8}>
+          <Panel id={child.id} order={i} minSize={8} defaultSize={100 * leafCount(child) / leafCount(node)}>
             <TileLayout node={child} />
           </Panel>
         </Fragment>

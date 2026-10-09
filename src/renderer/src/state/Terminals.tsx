@@ -14,7 +14,7 @@ import type {
   TerminalSession
 } from '@shared/types'
 import { useToast } from '../components/Toast'
-import { disposeTerminal } from '../terminal/termCache'
+import { disposeTerminal, getTerminal } from '../terminal/termCache'
 import {
   buildTree,
   collectLeaves,
@@ -61,7 +61,7 @@ interface TerminalsValue {
   dockVisible: boolean
   dockHeight: number
   newTerminal: (opts?: Partial<CreateTerminalOptions>) => Promise<void>
-  adoptSession: (session: TerminalSession) => void
+  adoptSession: (session: TerminalSession, groupId?: string, groupName?: string) => void
   splitActive: (dir: 'row' | 'col') => Promise<void>
   closeSession: (sessionId: string) => void
   restartSession: (sessionId: string) => Promise<void>
@@ -87,6 +87,15 @@ export function useTerminals(): TerminalsValue {
   return ctx
 }
 
+function leaves(node: TileNode): TileNode[] {
+  return node.kind === 'leaf' ? [node] : node.children.flatMap(leaves)
+}
+function profileLayout(nodes: TileNode[]): TileNode {
+  if (nodes.length === 1) return nodes[0]
+  const middle = Math.ceil(nodes.length / 2)
+  return { id: crypto.randomUUID(), kind: 'split', dir: 'row', children: [profileLayout(nodes.slice(0, middle)), profileLayout(nodes.slice(middle))] }
+}
+
 export function TerminalsProvider({ children }: { children: ReactNode }): JSX.Element {
   const toast = useToast()
   const [groups, setGroups] = useState<TerminalGroup[]>([])
@@ -110,14 +119,17 @@ export function TerminalsProvider({ children }: { children: ReactNode }): JSX.El
   }, [])
 
   const adoptSession = useCallback(
-    (session: TerminalSession) => {
+    (session: TerminalSession, groupId?: string, groupName?: string) => {
+      getTerminal(session.id, 13)
       registerSession(session)
       const group: TerminalGroup = {
-        id: crypto.randomUUID(),
-        name: session.title,
+        id: groupId ?? crypto.randomUUID(),
+        name: groupName ?? session.title,
         tree: newLeaf(session.id)
       }
-      setGroups((g) => [...g, group])
+      setGroups((groups) => groups.some((g) => g.id === group.id)
+        ? groups.map((g) => g.id === group.id ? { ...g, tree: profileLayout([...leaves(g.tree), newLeaf(session.id)]) } : g)
+        : [...groups, group])
       setActiveGroupId(group.id)
       setActiveSessionId(session.id)
       setDockVisible(true)
@@ -322,6 +334,7 @@ export function TerminalsProvider({ children }: { children: ReactNode }): JSX.El
         setDockVisible(data.dockVisible)
         setDockHeight(data.dockHeight)
       } catch (err) {
+        for (const id of Object.keys(nextSessions)) void window.api.pty.kill(id)
         toast(`Couldn't restore terminals: ${err instanceof Error ? err.message : String(err)}`, 'error')
       }
     },

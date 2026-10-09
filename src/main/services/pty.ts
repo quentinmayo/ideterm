@@ -73,7 +73,7 @@ class PtyManager {
       cols: opts.cols ?? 80,
       rows: opts.rows ?? 24,
       cwd,
-      env: process.env as Record<string, string>
+      env: { ...process.env, ...opts.env }
     })
     const session: TerminalSession = {
       id,
@@ -88,19 +88,27 @@ class PtyManager {
     const entry: Entry = { session, pty, options: opts }
     this.sessions.set(id, entry)
     this.wire(entry)
-    if (opts.initialCommand) {
-      // Let the shell finish initializing before injecting the command.
-      setTimeout(() => pty.write(`${opts.initialCommand}\r`), 400)
-    }
+    this.startCommand(entry)
     return session
+  }
+
+  private startCommand(entry: Entry): void {
+    const pty = entry.pty
+    if (entry.options.initialCommand) setTimeout(() => {
+      if (this.sessions.get(entry.session.id)?.pty === pty && entry.session.alive) {
+        pty.write(`${entry.options.initialCommand}\r`)
+      }
+    }, 400)
   }
 
   private wire(entry: Entry): void {
     const { id } = entry.session
-    entry.pty.onData((data) => this.emit('pty:data', { id, data }))
+    const pty = entry.pty
+    entry.pty.onData((data) => { if (this.sessions.get(id)?.pty === pty) this.emit('pty:data', { id, data }) })
     entry.pty.onExit(({ exitCode }) => {
       const e = this.sessions.get(id)
-      if (e) e.session.alive = false
+      if (!e || e.pty !== pty) return
+      e.session.alive = false
       this.emit('pty:exit', { id, exitCode })
     })
   }
@@ -135,18 +143,19 @@ class PtyManager {
     } catch {
       /* ignore */
     }
-    const pty = nodePty.spawn(e.session.shell, [], {
+    const pty = nodePty.spawn(e.session.shell, e.options.shellArgs ?? [], {
       name: 'xterm-color',
       cols: e.pty.cols || 80,
       rows: e.pty.rows || 24,
       cwd: e.session.cwd,
-      env: process.env as Record<string, string>
+      env: { ...process.env, ...e.options.env }
     })
     e.pty = pty
     e.session.pid = pty.pid
     e.session.alive = true
     this.wire(e)
     this.emit('pty:restart', { id })
+    this.startCommand(e)
     return e.session
   }
 

@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import type { ReplaceResult, SearchFileResult, SearchMatch, SearchOptions } from '@shared/types'
-import { isPathInsideRoots } from './pathSafety'
+import { allowedPath } from './fileAccess'
 import { getActiveRoots } from './session'
 
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', 'out', 'release', '.vite', '.cache'])
@@ -30,12 +30,8 @@ export function findInText(text: string, matcher: RegExp): SearchMatch[] {
   return out
 }
 
-function assertAllowed(dir: string): string {
-  const root = resolve(dir)
-  if (!isPathInsideRoots(root, getActiveRoots())) {
-    throw new Error('Path is outside any project folder')
-  }
-  return root
+function assertAllowed(dir: string): Promise<string> {
+  return allowedPath(resolve(dir), getActiveRoots())
 }
 
 function isProbablyBinary(buf: Buffer): boolean {
@@ -47,13 +43,14 @@ export async function searchDir(
   query: string,
   opts: SearchOptions = {}
 ): Promise<SearchFileResult[]> {
-  const root = assertAllowed(dir)
+  const root = await assertAllowed(dir)
   if (!query.trim()) return []
   const matcher = buildMatcher(query, opts)
   const results: SearchFileResult[] = []
 
   async function walk(d: string): Promise<void> {
     if (results.length >= MAX_RESULTS) return
+    d = await assertAllowed(d)
     const entries = await fs.readdir(d, { withFileTypes: true })
     for (const e of entries) {
       if (results.length >= MAX_RESULTS) break
@@ -64,6 +61,7 @@ export async function searchDir(
       }
       if (!e.isFile()) continue
       try {
+        await assertAllowed(full)
         const stat = await fs.stat(full)
         if (stat.size > MAX_FILE_BYTES) continue
         const buf = await fs.readFile(full)
@@ -88,7 +86,7 @@ export async function replaceInDir(
   replacement: string,
   opts: SearchOptions = {}
 ): Promise<ReplaceResult> {
-  const root = assertAllowed(dir)
+  const root = await assertAllowed(dir)
   if (!query.trim()) return { filesChanged: 0, replacements: 0 }
   // For literal search, treat the replacement literally too (escape $ groups).
   const repl = opts.regex ? replacement : replacement.replace(/\$/g, '$$$$')
@@ -96,6 +94,7 @@ export async function replaceInDir(
   let replacements = 0
 
   async function walk(d: string): Promise<void> {
+    d = await assertAllowed(d)
     const entries = await fs.readdir(d, { withFileTypes: true })
     for (const e of entries) {
       const full = join(d, e.name)
@@ -105,6 +104,7 @@ export async function replaceInDir(
       }
       if (!e.isFile()) continue
       try {
+        await assertAllowed(full)
         const stat = await fs.stat(full)
         if (stat.size > MAX_FILE_BYTES) continue
         const buf = await fs.readFile(full)

@@ -6,6 +6,7 @@ import { registerIpc } from './ipc'
 import { ptyManager } from './services/pty'
 import * as sessionSvc from './services/session'
 import { checkForUpdates } from './services/updates'
+import { externalUrl } from './services/ipcValidation'
 
 const RELEASES_URL = 'https://github.com/quentinmayo/ideterm/releases'
 
@@ -22,7 +23,7 @@ async function runUpdateCheck(win: BrowserWindow): Promise<void> {
       defaultId: 0,
       cancelId: 1
     })
-    if (response === 0) shell.openExternal(r.url ?? RELEASES_URL)
+    if (response === 0) shell.openExternal(externalUrl(r.url ?? RELEASES_URL))
   } else if (r.error) {
     const { response } = await dialog.showMessageBox(win, {
       type: 'warning',
@@ -33,7 +34,7 @@ async function runUpdateCheck(win: BrowserWindow): Promise<void> {
       defaultId: 1,
       cancelId: 1
     })
-    if (response === 0) shell.openExternal(r.url ?? RELEASES_URL)
+    if (response === 0) shell.openExternal(externalUrl(r.url ?? RELEASES_URL))
   } else {
     await dialog.showMessageBox(win, {
       type: 'info',
@@ -44,11 +45,15 @@ async function runUpdateCheck(win: BrowserWindow): Promise<void> {
   }
 }
 
+// Test runs use an isolated profile and never touch the real workspace registry.
+if (process.env.IDETERM_TEST_USER_DATA) app.setPath('userData', process.env.IDETERM_TEST_USER_DATA)
+
 const baseDir = dirname(fileURLToPath(import.meta.url))
 const rendererUrl = process.env.ELECTRON_RENDERER_URL
 const isDev = !!rendererUrl
 
 let mainWindow: BrowserWindow | null = null
+let quitting = false
 
 /** Build the application menu. File-menu items message the renderer, which owns the live state. */
 function buildMenu(win: BrowserWindow): void {
@@ -112,6 +117,7 @@ function buildMenu(win: BrowserWindow): void {
 }
 
 function createWindow(): void {
+  void store.setCleanShutdown(false).catch(console.error)
   mainWindow = new BrowserWindow({
     width: 1320,
     height: 860,
@@ -121,8 +127,8 @@ function createWindow(): void {
     title: "Mayo's IdeTerm",
     ...(isDev ? { icon: join(baseDir, '../../build/icon.png') } : {}),
     webPreferences: {
-      preload: join(baseDir, '../preload/index.mjs'),
-      sandbox: false,
+      preload: join(baseDir, '../preload/index.cjs'),
+      sandbox: true,
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -136,24 +142,51 @@ function createWindow(): void {
     if (url !== mainWindow?.webContents.getURL()) event.preventDefault()
   })
 
-  registerIpc(mainWindow, () => {
+  const disposeIpc = registerIpc(mainWindow, () => {
     if (mainWindow && !mainWindow.isDestroyed()) buildMenu(mainWindow)
   })
   buildMenu(mainWindow)
+  if (!isDev) {
+    mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      callback({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-src 'none'"
+      ] } })
+    })
+  }
 
-  // Save-on-close: give the renderer a chance to flush the active session.
-  let flushed = false
-  mainWindow.on('close', (event) => {
-    if (flushed || !mainWindow) return
+  // A failed flush is not a clean shutdown. Let the user keep the window open.
+  const win = mainWindow
+  let closing = false
+  let cancelFlush: (() => void) | undefined
+  win.on('close', (event) => {
     event.preventDefault()
-    flushed = true
-    const finish = async (): Promise<void> => {
-      await store.setCleanShutdown(true)
-      mainWindow?.destroy()
+    if (closing) return
+    closing = true
+    let settled = false
+    const finish = async (ok: boolean): Promise<void> => {
+      if (settled) return
+      settled = true
+      cancelFlush?.()
+      if (!ok) {
+        const { response } = await dialog.showMessageBox(win, {
+          type: 'warning', message: 'The session could not be saved.',
+          detail: 'Keep the window open to retry, or close and use the last recovery snapshot.',
+          buttons: ['Keep open', 'Close without saving'], defaultId: 0, cancelId: 0
+        })
+        if (response !== 1) { closing = false; quitting = false; return }
+      }
+      try { await store.setCleanShutdown(ok) }
+      catch (error) { console.error('Could not record shutdown', error) }
+      win.destroy()
+      if (quitting) app.quit()
     }
-    ipcMain.once('session:flush-done', () => void finish())
-    mainWindow.webContents.send('session:flush')
-    setTimeout(() => void finish(), 2500) // never let close hang
+    const listener = (event: Electron.IpcMainEvent, ok: unknown): void => {
+      if (event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame) void finish(ok === true)
+    }
+    const timer = setTimeout(() => void finish(false), 10_000)
+    cancelFlush = () => { clearTimeout(timer); ipcMain.removeListener('session:flush-done', listener) }
+    ipcMain.on('session:flush-done', listener)
+    win.webContents.send('session:flush')
   })
 
   if (rendererUrl) {
@@ -164,6 +197,9 @@ function createWindow(): void {
   if (isDev) mainWindow.webContents.openDevTools({ mode: 'detach' })
 
   mainWindow.on('closed', () => {
+    cancelFlush?.()
+    disposeIpc()
+    ptyManager.killAll()
     mainWindow = null
   })
 }
@@ -194,6 +230,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
-  ptyManager.killAll()
-  void store.setCleanShutdown(true)
+  quitting = true
+  if (!mainWindow) ptyManager.killAll()
 })

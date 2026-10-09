@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { execFileSync } from 'node:child_process'
 import type { Tool, ToolType } from '@shared/types'
 import { buildCommandLine, placeFolder, quoteArg, resolveLaunchMode } from '../src/main/services/launchCommand'
 
@@ -18,11 +19,11 @@ describe('quoteArg', () => {
     expect(quoteArg('--flag')).toBe('--flag')
   })
   it('quotes args with spaces', () => {
-    expect(quoteArg('C:\\Program Files\\x')).toBe('"C:\\Program Files\\x"')
+    expect(quoteArg('C:\\Program Files\\x', 'cmd')).toBe('"C:\\Program Files\\x"')
   })
   it('escapes inner quotes and handles empty', () => {
-    expect(quoteArg('a"b')).toBe('"a\\"b"')
-    expect(quoteArg('')).toBe('""')
+    expect(quoteArg('a"b')).toBe("'a\"b'")
+    expect(quoteArg('')).toBe("''")
   })
 })
 
@@ -70,6 +71,22 @@ describe('buildCommandLine', () => {
   })
   it('quotes spaced executable paths and folders', () => {
     const t = tool({ type: 'ide', path: 'C:\\Apps\\My IDE\\ide.exe', args: [], folderArgPosition: 'append' })
-    expect(buildCommandLine(t, 'D:\\my repo')).toBe('"C:\\Apps\\My IDE\\ide.exe" "D:\\my repo"')
+    expect(buildCommandLine(t, 'D:\\my repo', 'cmd')).toBe('"C:\\Apps\\My IDE\\ide.exe" "D:\\my repo"')
+  })
+})
+
+
+describe('literal argument handling', () => {
+  it.skipIf(process.platform === 'win32')('round trips metacharacters through a real POSIX shell', () => {
+    for (const value of ["a'b", '$(echo injected)', '`echo injected`', 'a;b', 'a&b', 'a b', 'a"b', '', 'line\nbreak', '$HOME']) {
+      expect(execFileSync('/bin/sh', ['-c', `printf %s ${quoteArg(value)}`], { encoding: 'utf-8' })).toBe(value)
+    }
+  })
+  it('refuses cmd expansion tokens rather than executing them', () => {
+    for (const value of ['%PATH%', '!PATH!', 'a"b', 'a\nb']) expect(() => quoteArg(value, 'cmd')).toThrow()
+  })
+  it('quotes PowerShell literals and invokes executable paths', () => {
+    expect(quoteArg("a'b$env:PATH", 'powershell')).toBe("'a''b$env:PATH'")
+    expect(buildCommandLine(tool({ type: 'ide', path: 'C:\\My App\\app.exe' }), undefined, 'powershell')).toBe("& 'C:\\My App\\app.exe'")
   })
 })

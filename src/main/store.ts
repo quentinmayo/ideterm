@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { atomicWrite } from './services/atomicWrite'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import type {
@@ -80,7 +81,11 @@ class Store {
         this.legacyProjects = parsed.projects
       }
       this.abruptShutdown = (parsed.snapshots?.cleanShutdown ?? true) === false
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        // Preserve damaged configuration for recovery before creating defaults.
+        await fs.copyFile(this.file, `${this.file}.corrupt-${Date.now()}`)
+      }
       this.state = defaultState()
     }
     this.state.version = STORE_VERSION
@@ -111,9 +116,7 @@ class Store {
 
   private async persist(): Promise<void> {
     if (!this.loaded) return
-    const tmp = `${this.file}.tmp`
-    await fs.writeFile(tmp, JSON.stringify(this.state, null, 2), 'utf-8')
-    await fs.rename(tmp, this.file)
+    await atomicWrite(this.file, JSON.stringify(this.state, null, 2))
   }
 
   async setSettings(partial: Partial<AppSettings>): Promise<AppSettings> {

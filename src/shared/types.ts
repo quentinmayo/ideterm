@@ -62,6 +62,26 @@ export interface ProjectFolder {
   name: string
 }
 
+export interface LaunchStep {
+  id: string
+  name: string
+  folderId: string
+  kind: 'tool' | 'command'
+  toolId?: string
+  modeId?: string
+  command?: string
+  env?: Record<string, string>
+  /** Wait for a local TCP service before launching the next step. */
+  readyPort?: number
+  timeoutSeconds?: number
+}
+
+export interface LaunchProfile {
+  id: string
+  name: string
+  steps: LaunchStep[]
+}
+
 export interface Project {
   id: string
   name: string
@@ -69,6 +89,7 @@ export interface Project {
   /** Emoji shown next to the project name. */
   icon?: string
   folders: ProjectFolder[]
+  launchProfiles?: LaunchProfile[]
   createdAt: number
   /** Updated when the project is selected/opened in the Projects view. */
   lastAccessedAt?: number
@@ -261,6 +282,8 @@ export interface SessionUiState {
   selectedProjectId: string | null
   filesTarget: { path: string; name: string } | null
   openFiles: { path: string; name: string }[]
+  /** Unsaved file contents, restored as dirty buffers, never executed. */
+  editorDrafts?: Record<string, string>
   terminals: SerializedGroup[]
   floating: SerializedFloating[]
   dockVisible: boolean
@@ -309,6 +332,7 @@ export interface TerminalSession {
 }
 
 export interface CreateTerminalOptions {
+  env?: Record<string, string>
   cwd: string
   shell?: string
   /** Arguments passed to the shell executable itself (e.g. ["-d", "Ubuntu"] for wsl). */

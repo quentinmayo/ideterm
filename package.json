@@ -1,7 +1,7 @@
 {
   "name": "ideterm",
   "version": "0.3.2",
-  "description": "Mayo's IdeTerm — one control center for your IDEs, terminals, repos, and coding agents.",
+  "description": "Mayo's IdeTerm \u2014 one control center for your IDEs, terminals, repos, and coding agents.",
   "main": "./out/main/index.js",
   "author": "Quentin Mayo",
   "license": "MIT",
@@ -19,7 +19,8 @@
     "check": "npm run typecheck && npm run test",
     "make-icons": "node scripts/make-icons.mjs",
     "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && electron-builder --win"
+    "dist:win": "npm run build && electron-builder --win",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@codemirror/commands": "^6.7.1",
@@ -50,9 +51,11 @@
     "@xterm/xterm": "^5.5.0",
     "codemirror": "^6.0.1",
     "react-resizable-panels": "^2.1.7",
-    "simple-git": "^3.27.0"
+    "simple-git": "^3.27.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@types/node": "^22.10.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

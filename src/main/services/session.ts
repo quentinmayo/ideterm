@@ -2,6 +2,8 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import type { Project, SessionSnapshot, SessionState, SnapshotMeta } from '@shared/types'
 import { store } from '../store'
+import { atomicWrite } from './atomicWrite'
+import { parseSnapshot } from '../../shared/validation'
 
 const SNAPSHOT_VERSION = 1
 
@@ -46,8 +48,7 @@ async function ensureDir(): Promise<void> {
 
 export async function readSnapshot(path: string): Promise<SessionSnapshot> {
   const raw = await fs.readFile(path, 'utf-8')
-  const parsed = JSON.parse(raw) as SessionSnapshot
-  setActiveProjects(parsed.projects ?? [])
+  const parsed = parseSnapshot(JSON.parse(raw))
   // Opening an on-disk snapshot should immediately affect startup/recents menus.
   if (path === tempPath()) await store.setLastOpened(path)
   else await store.addRecent(path)
@@ -56,11 +57,8 @@ export async function readSnapshot(path: string): Promise<SessionSnapshot> {
 
 export async function writeSnapshot(path: string, snapshot: SessionSnapshot): Promise<SessionSnapshot> {
   await ensureDir()
-  snapshot.updatedAt = Date.now()
-  const tmp = `${path}.tmp`
-  await fs.writeFile(tmp, JSON.stringify(snapshot, null, 2), 'utf-8')
-  await fs.rename(tmp, path)
-  setActiveProjects(snapshot.projects ?? [])
+  snapshot = parseSnapshot({ ...snapshot, updatedAt: Date.now() })
+  await atomicWrite(path, JSON.stringify(snapshot, null, 2))
   // Don't clutter the recent list with the temporary working file.
   if (path === tempPath()) await store.setLastOpened(path)
   else await store.addRecent(path)

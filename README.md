@@ -13,7 +13,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/electron--vite-2-646CFF?logo=vite&logoColor=white)
 ![Platforms](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-supported-success)
-![Tests](https://img.shields.io/badge/tests-36%20passing-brightgreen)
+[![Checks](https://github.com/quentinmayo/ideterm/actions/workflows/check.yml/badge.svg)](https://github.com/quentinmayo/ideterm/actions/workflows/check.yml)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 </div>
@@ -54,6 +54,27 @@ embedded right inside the app.
 
 ## ✨ What you get
 
+### ▶ Launch your whole project (next release)
+
+![Three repositories launched from one saved profile](docs/images/project-launch.png)
+
+Create a project, add your repositories, then select **New launch profile**. Name it **Develop**,
+**Debug**, or **Review**, and choose a folder and a tool or command for each step. Saved profiles
+live in the workspace snapshot. Click **Launch Develop** to start the entire setup.
+
+For example: open the frontend in your IDE, start the backend in an embedded terminal, wait for
+its local port, and launch an agent in the infra repo. Embedded terminals share a split layout.
+Each step can specify environment overrides and an optional TCP readiness check at `127.0.0.1`.
+The runner validates folder/tool references and port availability before starting. If a launch or
+readiness check fails, later steps are skipped and earlier terminals remain available for inspection.
+**Stop terminals** cancels pending steps and closes the profile's embedded terminals; external
+applications stay open. Individual terminals can be restarted with their original command and
+environment. Without a readiness check, **launched** means the terminal was started, not that its
+command succeeded. Restoring a snapshot opens shells without rerunning profile commands.
+
+Environment overrides and recovery drafts are saved as plain text in the snapshot. Use local
+credential tooling for secrets rather than storing them in a shared profile.
+
 ### 🧰 A universal launcher
 At its heart, a "tool" is just **an executable + flags + how to run it**. That's it — so IdeTerm can
 launch *anything* you can name a path to. It auto-detects the usual suspects on first run:
@@ -74,7 +95,9 @@ Add your own with a name, path, args, icon, type, and one of three **launch mode
 Group `C:\dev\frontend`, `…\backend`, `…\scanner-service`, and `…\infra` into one project. Each
 folder card shows **branch · clean/dirty · staged/modified/untracked · ahead/behind · last commit**.
 Got a parent directory full of repos? Use **"Break into subfolders…"** to expand it into its
-children, with select-all/none and an option to drop the parent.
+children, with select-all/none and an option to drop the parent. Folder cards expose Files, Terminal,
+and Run tool actions directly. Git summaries refresh after in-app changes and when the window
+regains focus.
 
 ### 🖥️ Embedded terminals that actually tile
 Real PTY-backed terminals (via [`@lydell/node-pty`](https://www.npmjs.com/package/@lydell/node-pty)
@@ -111,6 +134,13 @@ disk*, *open an existing* one, or jump back into the most recent. Snapshots **au
 and on close; if the app crashes, the launcher offers to **restore** your last session. Drive it all
 from the **File menu** (New / Open / Save / Save As / Recent) or set "always open the most recent" in
 Settings. Tools and preferences stay global across every snapshot.
+
+Unsaved editor buffers survive view changes. Recovery drafts autosave after a one-second pause
+and on close, and reopening the snapshot restores them as unsaved tabs. **Save Session** preserves
+drafts; **Ctrl/Cmd+S** in the editor writes the actual source file. Closing a dirty tab offers
+Save / Discard / Cancel. Switching sessions first saves the current snapshot. Starting another
+temporary session prompts for a location to preserve the current temporary workspace.
+A failed close-time save lets you keep the window open and retry.
 
 ---
 
@@ -157,10 +187,11 @@ npm install      # ✅ no compiler / Visual Studio needed — PTY ships prebuilt
 npm run dev      # 🔥 launch with hot reload
 npm run check    # 🧪 typecheck + run the unit tests
 npm run build    # 📦 typecheck + bundle to out/
+npm run test:e2e # exercise the built Electron app with isolated test workspaces
 npm run dist     # 💿 build an installer for the current OS (nsis / dmg / AppImage)
 ```
 
-**Requirements:** Node 18+ and Git on your `PATH`. Runs on Windows, macOS, and Ubuntu/Linux.
+**Requirements:** Node 22+ and Git on your `PATH`. Runs on Windows, macOS, and Ubuntu/Linux.
 
 ---
 
@@ -195,33 +226,40 @@ project-folder roots.
 
 ## 💾 Where state lives
 
-Projects, custom tools, saved commands, and settings are stored in a single version-stamped JSON
-file in your OS user-data directory (e.g. `%APPDATA%/ideterm/ideterm.json` on Windows), written
-atomically so a crash mid-save can't corrupt it.
+Custom tools, commands, preferences, and the recent-session registry live in the version-stamped
+`ideterm.json` in your OS user-data directory (e.g. `%APPDATA%/ideterm/` on Windows).
+Projects, launch profiles, editor recovery drafts, and layouts live in `*.ideterm-session.json`
+snapshots. Writes to each destination are serialized and use a unique temporary file plus rename.
+Malformed snapshots are rejected before activation. If global configuration is unreadable, its
+original contents are preserved in an `ideterm.json.corrupt-<timestamp>` backup.
 
 ## 🔒 Security
 
-- `contextIsolation: true`, `nodeIntegration: false`.
+- `sandbox: true`, `contextIsolation: true`, `nodeIntegration: false`; a bundled CommonJS preload works inside the sandbox.
 - External links open in your real browser; arbitrary `window.open`/navigation is denied.
-- File operations are restricted to paths inside your project folders.
-- `spawn` uses argument arrays; "dangerous" flags are only ever the ones *you* configure.
+- File operations check both lexical and resolved paths against project roots, including existing ancestors of new files. Links escaping those roots are rejected; root deletion/moves and destination overwrites are blocked.
+- External executables use argument arrays. Windows batch shims use a restricted `cmd.exe` adapter; literal arguments to embedded tools are quoted for POSIX, PowerShell, or cmd. Freeform command steps intentionally run shell code.
 - The SSH builder opens a **local** session only — it does not connect your other tools to a remote host.
-- **Known follow-up:** a production Content-Security-Policy is not yet set (Electron shows a
-  dev-only warning that's suppressed in packaged builds). Add one before distributing.
+- Production windows enforce a Content-Security-Policy. Every IPC handler validates the sending main frame and its argument schema. Browser links allow only HTTP/HTTPS.
 
 ## 🧪 Testing
 
-`npm test` runs the Vitest suite (currently **36 tests**) covering the pure logic: SSH command
-assembly, launch-command building, the path-sandbox guards, and the terminal tiling tree. Run
-`npm run check` to typecheck and test together before committing.
+`npm run check` typechecks both processes and runs unit tests, including concurrent persistence,
+symlink boundaries, shell quoting, and IPC validation. `npm run build && npm run test:e2e` runs
+Playwright against Electron using temporary user-data directories and fixture repositories. It
+covers draft recovery, tool-mode forwarding, project profiles, readiness, cancellation, and macOS
+window reopening. On a headless Linux machine use `xvfb-run --auto-servernum npm run test:e2e`.
+
+The Checks workflow runs typechecking, unit tests, builds, and Electron integration tests on every
+pull request and main-branch push on Windows, macOS, and Ubuntu. No test launches user profiles or
+writes to the normal IdeTerm configuration directory.
 
 ## 🗺️ Roadmap
 
-- Project-wide search and per-tool environment overrides
-- Production CSP hardening
+- Signed and notarized installers (requires publisher certificates and Apple credentials)
+- Dependency/runtime upgrades and ongoing security maintenance
 - Git stash / branch-switch UI
 - Theming and a plugin API
-- Code signing (remove SmartScreen/Gatekeeper warnings)
 
 ## 🤝 Contributing
 
