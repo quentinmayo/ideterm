@@ -1,7 +1,7 @@
 {
   "name": "ideterm",
   "version": "0.3.2",
-  "description": "Mayo's IdeTerm \u2014 one control center for your IDEs, terminals, repos, and coding agents.",
+  "description": "Mayo's IdeTerm — one control center for your IDEs, terminals, repos, and coding agents.",
   "main": "./out/main/index.js",
   "author": "Quentin Mayo",
   "license": "MIT",
@@ -51,7 +51,7 @@
     "@xterm/xterm": "^5.5.0",
     "codemirror": "^6.0.1",
     "react-resizable-panels": "^2.1.7",
-    "simple-git": "^3.27.0",
+    "simple-git": "^4.0.2",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -60,15 +60,15 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8",
-    "electron-vite": "^2.3.0",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
     "png-to-ico": "^3.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.5",
     "typescript": "^5.7.2",
-    "vite": "^5.4.11",
-    "vitest": "^2.1.9"
+    "vite": "^7.3.7",
+    "vitest": "^5.0.4"
   }
 }
