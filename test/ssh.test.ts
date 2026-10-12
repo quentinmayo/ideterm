@@ -14,9 +14,29 @@ describe('buildSshCommand', () => {
   })
 
   it('adds identity file (quoted when spaced) and warns if missing', () => {
-    const res = buildSshCommand({ host: 'h', user: 'u', identityFile: 'C:\\My Keys\\id_ed25519' })
+    const res = buildSshCommand({ host: 'h', user: 'u', identityFile: 'C:\\My Keys\\id_ed25519' }, 'win32')
     expect(res.command).toContain('-i "C:\\My Keys\\id_ed25519"')
     expect(res.warnings.some((w) => w.includes('Identity file not found'))).toBe(true)
+  })
+
+  it('keeps Windows paths intact and strips quotes that cannot be in a path', () => {
+    expect(buildSshCommand({ host: 'h', user: 'u', identityFile: 'C:\\keys\\id' }, 'win32').command).toBe(
+      'ssh -i C:\\keys\\id u@h'
+    )
+    expect(buildSshCommand({ host: 'h', user: 'u', identityFile: 'C:\\my "keys"\\id' }, 'win32').command).toBe(
+      'ssh -i "C:\\my keys\\id" u@h'
+    )
+  })
+
+  it('escapes shell-significant characters inside POSIX double quotes', () => {
+    expect(buildSshCommand({ host: 'h', user: 'u', identityFile: '/home/me/.ssh/id' }, 'linux').command).toBe(
+      'ssh -i /home/me/.ssh/id u@h'
+    )
+    expect(buildSshCommand({ host: 'h', user: 'u', identityFile: '/tmp/my key' }, 'darwin').command).toBe(
+      'ssh -i "/tmp/my key" u@h'
+    )
+    const hostile = buildSshCommand({ host: 'h', user: 'u', identityFile: '/k\\" $(id) `x`' }, 'linux')
+    expect(hostile.command).toBe('ssh -i "/k\\\\\\" \\$(id) \\`x\\`" u@h')
   })
 
   it('adds -A for agent forwarding and appends a remote command', () => {
