@@ -55,12 +55,12 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.0",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^22.10.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^44.7.0",
+    "electron": "^44.9.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "png-to-ico": "^3.0.2",
@@ -69,6 +69,6 @@
     "sharp": "^0.35.5",
     "typescript": "^5.7.2",
     "vite": "^7.3.7",
-    "vitest": "^5.0.4"
+    "vitest": "^5.0.5"
   }
 }
